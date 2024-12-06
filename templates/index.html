@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>RAG Chatbot Interface</title>
+    <div id="logging" style="display: none;"></div>
+
+    <style>
+      /* Style adjustments to center video, layout, and buttons */
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      .left-column {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        box-sizing: border-box;
+      }
+
+      #videoContainer {
+    position: relative; /* Set relative positioning for absolute child elements */
+    width: 400px;
+    height: 600px;
+    background: black;
+    margin-bottom: 20px;
+  }
+
+  #remoteVideo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  #follow_up_questions {
+    width: 100%; /* Match the parent width */
+    display: flex;
+    flex-wrap: wrap; /* Allow buttons to wrap if there's not enough space */
+    gap: 10px; /* Spacing between buttons */
+    margin: 10px 0; /* Spacing around the button container */
+    justify-content: center; /* Center buttons horizontally */
+  }
+
+  #follow_up_questions button {
+    background-color: rgb(43, 4, 4);
+    color: white;
+    border: none;
+    padding: 8px 12px; /* Adequate padding for better UX */
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    box-sizing: border-box;
+  }
+
+  #follow_up_questions button:hover {
+    background-color: #0056b3;
+  }
+
+  #query_form {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 400px;
+  }
+
+  #user_query {
+    flex: 4; /* 4 parts out of 5 for 80% */
+    height: 40px;
+    font-size: 14px;
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    box-sizing: border-box;
+    margin-right: 10px; /* Spacing between input and button */
+  }
+
+  #query_form button {
+    flex: 1; /* 1 part out of 5 for 20% */
+    height: 40px;
+    padding: 0;
+    font-size: 14px;
+    background-color: #007BFF;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    text-align: center;
+  }
+
+  #query_form button:hover {
+    background-color: #0056b3;
+  }
+
+  #chatPanel {
+    position: fixed; /* Make the panel fixed on the right */
+    top: 0;
+    right: 0;
+    width: 300px; /* Default width of the panel */
+    height: 100vh; /* Full viewport height */
+    background: #f9f9f9;
+    border-left: 1px solid #ccc;
+    box-shadow: -2px 0 5px rgba(0, 0, 0, 0.1);
+    overflow-y: auto;
+    transform: translateX(0); /* Fully visible by default */
+    transition: transform 0.3s ease-in-out; /* Smooth slide effect */
+    z-index: 1000; /* Ensure it's above other elements */
+  }
+
+  #chatPanel.closed {
+    transform: translateX(100%); /* Slide out of view */
+  }
+
+  #toggleChatPanel {
+    position: absolute; /* Position toggle button inside the panel */
+    top: 10px;
+    left: -40px; /* Place it just outside the panel */
+    width: 40px;
+    height: 40px;
+    background: #007BFF;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  }
+
+  #toggleChatPanel:hover {
+    background: #0056b3;
+  }
+      .right-column {
+        flex: 1;
+        padding: 20px;
+        overflow-y: auto;
+        box-sizing: border-box;
+        border-left: 1px solid #ccc;
+      }
+
+      .chat-history {
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      .chat-history strong {
+        display: block;
+        margin-bottom: 5px;
+      }
+    </style>
+      <!-- Include Azure Speech SDK -->
+      <script src="https://aka.ms/csspeech/jsbrowserpackageraw"></script>
+
+      <!-- Include the JavaScript file -->
+      <script src="{{ url_for('static', filename='js/new.js') }}"></script>
+      <script>
+        function toggleChatPanel() {
+          const chatPanel = document.getElementById('chatPanel');
+          chatPanel.classList.toggle('closed');
+        }
+      </script>
+      
+      <script>
+        // Initialize the avatar session on page load
+        window.onload = () => {
+          startSessionAutomatically();
+        };
+  
+        // Handle form submission
+        function submitQuery() {
+          const userQuery = document.getElementById('user_query').value;
+          if (!userQuery) return;
+  
+          fetch('/main', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_query: userQuery })
+          })
+          .then(response => response.json())
+          .then(data => {
+            // Update chat history
+            const chatHistoryDiv = document.getElementById('chatbot_response');
+            chatHistoryDiv.innerHTML += `<p><strong>You:</strong> ${userQuery}</p>`;
+            chatHistoryDiv.innerHTML += `<p><strong>Avatar:</strong> ${data.response}</p>`;
+  
+            // Make the avatar speak
+            if (data.response) {
+              originalSpeakFunction(data.response);
+            }
+  
+            // Clear input field
+            document.getElementById('user_query').value = '';
+  
+            // Update follow-up questions
+            const followUpContainer = document.getElementById('follow_up_questions');
+            followUpContainer.innerHTML = '';
+            if (data.follow_up_questions) {
+              data.follow_up_questions.forEach(question => {
+                const button = document.createElement('button');
+                button.innerText = question;
+                button.onclick = () => {
+                  document.getElementById('user_query').value = question;
+                  submitQuery();
+                };
+                followUpContainer.appendChild(button);
+              });
+            }
+          })
+          .catch(error => console.error('Error:', error));
+        }
+      </script>
+    </head>
+    <body>
+      <!-- Left column -->
+      <div class="left-column">
+        <!-- Live video -->
+        <div id="videoContainer">
+          <div id="remoteVideo"></div>
+          <canvas id="canvas" width="400" height="600" style="background-color: transparent;" hidden="hidden"></canvas>
+        </div>
+      
+        <!-- Follow-up questions -->
+        <div id="follow_up_questions"></div>
+      
+        <!-- Input form -->
+        <div id="query_wrapper" style="display: none;">
+          <form id="query_form" onsubmit="event.preventDefault(); submitQuery();">
+            <textarea id="user_query" name="user_query" placeholder="Enter your question here"></textarea>
+            <button type="submit">Submit Query</button>
+          </form>
+        </div>
+      
+      </div>
+      
+  
+        <!-- Hidden stopSpeaking button -->
+        <button id="stopSpeaking" style="display: none;" onclick="window.stopSpeaking()">Stop Speaking</button>
+  
+        <!-- Hidden audio element -->
+        <audio id="audio" hidden></audio>
+      </div>
+  
+<!-- Right column -->
+<div id="chatPanel" class="right-column">
+    <button id="toggleChatPanel" onclick="toggleChatPanel()">☰ Chat</button>
+    <h3>Chatbot Response:</h3>
+    <div id="chatbot_response" class="chat-history"></div>
+  </div>
+  
+
+      
+    </body>
+  </html>
