@@ -357,9 +357,6 @@ HTML_TEMPLATE =
     </div>
   </body>
 </html>
-
-
-
 """
 
 
