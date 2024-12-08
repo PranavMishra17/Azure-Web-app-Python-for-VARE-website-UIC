@@ -73,6 +73,7 @@ LLM_Primary = AzureChatOpenAI(
     azure_deployment="varelabsAssistant",
     api_key="370e4756680d40a9978934a4f8af3ed9",
     api_version="2023-10-01-preview",
+    azure_endpoint="https://testopenaisaturday.openai.azure.com/",
     temperature=0.5,
     max_tokens=None,
     timeout=None,
@@ -128,236 +129,6 @@ def clean_questions(questions):
     """
     cleaned_questions = [re.sub(r'^\d+[\.\)]?\s*', '', question) for question in questions]
     return cleaned_questions
-"""
-# HTML template with Jinja2 for dynamic content
-HTML_TEMPLATE = 
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>RAG Chatbot Interface</title>
-    <div id="logging" style="display: none;"></div>
-
-    <style>
-      /* Style adjustments to center video, layout, and buttons */
-      body {
-        font-family: Arial, sans-serif;
-        margin: 0;
-        padding: 0;
-        display: flex;
-        height: 100vh;
-        overflow: hidden;
-      }
-
-      .left-column {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-        box-sizing: border-box;
-      }
-
-      #videoContainer {
-        position: relative;
-        width: 400px;
-        height: 600px;
-        background: black;
-        margin-bottom: 20px;
-      }
-
-      #remoteVideo {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-      }
-
-#follow_up_questions {
-    position: absolute;
-    bottom: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: grid;
-    grid-template-columns: repeat(1, 1fr); /* Two columns for wider buttons */
-    grid-auto-rows: auto; /* Adjust height automatically */
-    gap: 10px; /* Space between buttons */
-    max-width: 100%; /* Ensure container does not overflow */
-    justify-items: center; /* Center-align buttons within each grid cell */
-}
-
-#follow_up_questions button {
-    background-color: #007BFF;
-    color: white;
-    border: none;
-    padding: 8px 10px; /* Increase padding for a larger button size */
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 14px; /* Slightly larger font */
-    text-align: center; /* Center-align button text */
-    width: 100%; /* Make button take full width of grid cell */
-    box-sizing: border-box;
-}
-
-#follow_up_questions button:hover {
-    background-color: #0056b3;
-}
-
-
-
-      #query_form {
-        width: 400px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-      }
-
-      #user_query {
-        width: 100%;
-        height: 40px;
-        font-size: 14px;
-        padding: 5px;
-        border: 1px solid #ccc;
-        border-radius: 5px;
-        box-sizing: border-box;
-        margin-bottom: 10px;
-      }
-
-      #query_form button {
-        width: 100%;
-        padding: 10px;
-        font-size: 14px;
-        background-color: #007BFF;
-        color: white;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-      }
-
-      #query_form button:hover {
-        background-color: #0056b3;
-      }
-
-      .right-column {
-        flex: 1;
-        padding: 20px;
-        overflow-y: auto;
-        box-sizing: border-box;
-        border-left: 1px solid #ccc;
-      }
-
-      .chat-history {
-        font-size: 14px;
-        line-height: 1.6;
-      }
-
-      .chat-history strong {
-        display: block;
-        margin-bottom: 5px;
-      }
-    </style>
-    <script src="https://aka.ms/csspeech/jsbrowserpackageraw"></script>
-    <script src="{{ url_for('static', filename='js/new.js') }}"></script>
-    <script>
-      // Initialize and start the avatar session automatically on page load
-      window.onload = () => {
-        startSessionAutomatically();
-        
-      };
-    </script>
-    {% if response %}
-<script>
-  // Call the speak function with the response from the primary LLM
-  originalSpeakFunction("{{ response | escapejs }}");
-</script>
-    {% endif %}
-    <script>
-      function submitFollowUp(question) {
-        document.getElementById('user_query').value = question;
-        submitQuery(); // Call AJAX function instead of form submission
-      }
-
-      // AJAX submission to prevent page reload
-      function submitQuery() {
-        const userQuery = document.getElementById('user_query').value;
-        if (!userQuery) return; // Do nothing if the input is empty
-
-        fetch('/main', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ user_query: userQuery })
-        })
-        .then(response => response.json())
-        .then(data => {
-          // Update chat history with new response
-          const chatHistoryDiv = document.getElementById('chatbot_response');
-          chatHistoryDiv.innerHTML += `<p><strong>You:</strong> ${userQuery}</p>`;
-          chatHistoryDiv.innerHTML += `<p><strong>Avatar:</strong> ${data.response}</p>`;
-
-          // Clear input field
-          document.getElementById('user_query').value = '';
-
-          // Update follow-up questions if provided
-          const followUpContainer = document.getElementById('follow_up_questions');
-          followUpContainer.innerHTML = ''; // Clear old buttons
-          if (data.follow_up_questions) {
-            data.follow_up_questions.forEach(question => {
-              const button = document.createElement('button');
-              button.innerText = question;
-              button.onclick = () => submitFollowUp(question);
-              followUpContainer.appendChild(button);
-            });
-          }
-        })
-        .catch(error => {
-          console.error('Error:', error);
-          alert('An error occurred. Please try again.');
-        });
-      }
-    </script>
-  </head>
-  <body>
-    <!-- Left column for video, buttons, textbox, and submit button -->
-    <div class="left-column">
-      <div id="videoContainer">
-        <div id="overlayArea" style="position: absolute;" hidden="hidden">
-          <p id="overlayText" style="font-size: large;">Live Video</p>
-        </div>
-        <div id="remoteVideo"></div>
-        <canvas id="canvas" width="400" height="600" style="background-color: transparent;" hidden="hidden"></canvas>
-        <canvas id="tmpCanvas" width="400" height="600" hidden="hidden"></canvas>
-
-        <!-- Overlay generated buttons -->
-        <div id="follow_up_questions">
-          {% for question in follow_up_questions %}
-            <button onclick="submitFollowUp('{{ question }}')">{{ question }}</button>
-          {% endfor %}
-        </div>
-      </div>
-
-      <!-- Textbox and submit button -->
-      <form id="query_form" onsubmit="event.preventDefault(); submitQuery();" method="post">
-        <textarea id="user_query" name="user_query" placeholder="Enter your question here"></textarea>
-        <button type="submit">Submit Query</button>
-      </form>
-    </div>
-
-    <!-- Right column for chat history -->
-    <div class="right-column">
-      <h3>Chatbot Response:</h3>
-      <div id="chatbot_response" class="chat-history">
-        {% for query, answer in chat_history %}
-          <p><strong>You:</strong> {{ query }}</p>
-          <p><strong>Avatar:</strong> {{ answer }}</p>
-        {% endfor %}
-      </div>
-    </div>
-  </body>
-</html>
-"""
 
 
 from flask import url_for
@@ -366,12 +137,27 @@ from flask import Flask, render_template_string, request, jsonify
 
 from flask import Flask, render_template, render_template_string, request, jsonify
 
+import os
+
+from flask import (Flask, redirect, render_template, request,
+                   send_from_directory, url_for)
+
 app = Flask(__name__)
 
 # Route for the start page
 @app.route('/')
 def start_page():
     return render_template('start.html')  # This serves the start page (start.html)
+
+@app.route('/')
+def index():
+   print('Request for index page received')
+   return render_template('index.html')
+
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(os.path.join(app.root_path, 'static'),
+                               'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 # Route for the main page
 @app.route('/main', methods=['GET', 'POST'])
@@ -409,4 +195,5 @@ def main_page():
     return render_template('index.html', response=None, follow_up_questions=follow_up_questions, chat_history=chat_history)
 
 if __name__ == '__main__':
-    app.run(debug=True, host ='0.0.0.0', port=8000)
+    #app.run(debug=True, host ='0.0.0.0', port=8000)
+    app.run()
