@@ -18,7 +18,6 @@ app = Flask(__name__)
 
 generated_buttons = []
 
-
 # Initialize Pinecone client
 #if not os.getenv("PINECONE_API_KEY"):
     #os.environ["PINECONE_API_KEY"] = getpass.getpass("Enter your Pinecone API key: ")
@@ -48,7 +47,6 @@ if index_name not in existing_indexes:
         time.sleep(1)
 
 index = pc.Index(index_name)
-
 vectorstore = PineconeVectorStore(index=index, embedding=embeddings, text_key="text")
 retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 2})
 
