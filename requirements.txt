@@ -2,7 +2,7 @@ Flask==2.2.2
 gunicorn
 Werkzeug==2.2.2
 openai==1.55.0
-langchain
-pinecone
-langchain_openai
-langchain_pinecone
+langchain==0.3.7
+pinecone==5.3.1
+langchain_openai==0.2.5
+langchain_pinecone==0.2.0

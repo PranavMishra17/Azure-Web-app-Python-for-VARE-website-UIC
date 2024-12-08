@@ -6,7 +6,7 @@ from langchain_pinecone import Pinecone as PineconeVectorStore
 import os
 #from dotenv import load_dotenv
 from pinecone import Pinecone
-from langchain import LLMChain
+from langchain.chains import LLMChain
 import time
 import subprocess
 import getpass
