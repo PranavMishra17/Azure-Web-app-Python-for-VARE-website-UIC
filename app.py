@@ -20,8 +20,8 @@ generated_buttons = []
 
 
 # Initialize Pinecone client
-if not os.getenv("PINECONE_API_KEY"):
-    os.environ["PINECONE_API_KEY"] = getpass.getpass("Enter your Pinecone API key: ")
+#if not os.getenv("PINECONE_API_KEY"):
+    #os.environ["PINECONE_API_KEY"] = getpass.getpass("Enter your Pinecone API key: ")
 #pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
 pc = Pinecone(api_key='9b4c63f4-a0ca-464c-b230-674ead51a686')
 # Initialize RAG-related components
