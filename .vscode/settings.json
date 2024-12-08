@@ -1,0 +1,4 @@
+{
+    "appService.defaultWebAppToDeploy": "/subscriptions/3620d60c-2dc0-4b05-bb08-9d148211f317/resourceGroups/secAvatar/providers/Microsoft.Web/sites/VARELabUICivory",
+    "appService.deploySubpath": "."
+}

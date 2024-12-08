@@ -27,7 +27,8 @@ pc = Pinecone(api_key='9b4c63f4-a0ca-464c-b230-674ead51a686')
 embeddings = AzureOpenAIEmbeddings(
     deployment="AzureAdaLangchain",
     model="text-embedding-ada-002",
-    api_key=os.getenv("OPENAI_API_KEY"),
+    #api_key=os.getenv("OPENAI_API_KEY"),
+    api_key="370e4756680d40a9978934a4f8af3ed9",
     openai_api_version="2023-10-01-preview",
     azure_endpoint="https://testopenaisaturday.openai.azure.com/",
     openai_api_type="azure",
@@ -70,6 +71,7 @@ retriever_Q = vectorstore_Q.as_retriever(search_type="similarity", search_kwargs
 # Initialize the primary LLM for answering the user's query
 LLM_Primary = AzureChatOpenAI(
     azure_deployment="varelabsAssistant",
+    api_key="370e4756680d40a9978934a4f8af3ed9",
     api_version="2023-10-01-preview",
     temperature=0.5,
     max_tokens=None,
@@ -407,4 +409,4 @@ def main_page():
     return render_template('index.html', response=None, follow_up_questions=follow_up_questions, chat_history=chat_history)
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True, host ='0.0.0.0', port=8000)
