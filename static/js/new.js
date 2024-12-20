@@ -5,12 +5,14 @@ var previousAnimationFrameTimestamp = 0;
 
 // Hardcoded Azure Speech parameters
 const azureSpeechRegion = "westus2";  // Region
+//const azureSpeechRegion = "eastus";  // Region
 const azureSpeechSubscriptionKey = "c897d534a33b4dd7a31e73026200226b";  // Subscription Key
-const ttsVoiceName = "en-US-RogerNeural";  // TTS Voice
-const talkingAvatarCharacterName = "professor-business"; // Avatar Character
+//const azureSpeechSubscriptionKey = "18f978cca70246309254196a93ce34b4";  // Subscription Key
+const ttsVoiceName = "en-US-drdavidNeural";  // TTS Voice
+const talkingAvatarCharacterName = "drdavid-professional"; // Avatar Character
 const talkingAvatarStyleName = ""; // Avatar Style (empty)
 const customVoiceEndpointId = "";  // Custom Voice Deployment ID (empty)
-const personalVoiceSpeakerProfileID = ""; // Personal Voice Speaker Profile ID (empty)
+const personalVoiceSpeakerProfileID = "6e315503-b996-485a-8bd7-9f22da3d2ecf"; // Personal Voice Speaker Profile ID (empty)
 const usePrivateEndpoint = false; // Enable Private Endpoint is false
 const privateEndpointUrl = "";    // Private Endpoint URL (not used since usePrivateEndpoint is false)
 
@@ -24,10 +26,16 @@ const backgroundColor = "#FFFFFFFF";  // Background Color (fully opaque white)
 // The original video is 1920x1080 (16:9).
 // We'll crop horizontally to create a portrait aspect ratio (9:16) for a consistent portrait mode view.
 // For a 9:16 portrait ratio with height 1080, the width should be (1080 * 9/16) = 607.5. We will round this to 608 for simplicity.
-const targetPortraitWidth = 608; 
-// Calculate left and right crop based on the target width. The video feed width is 1920, so:
-const cropLeft = Math.floor((1920 - targetPortraitWidth) / 2); // This should be ~656
-const cropRight = cropLeft + targetPortraitWidth; // ~656 + 608 = 1264
+// Slightly widen the crop
+const targetPortraitWidth = 700; // Increased from 608
+
+// Adjust crop calculation to center the wider crop
+const cropLeft = Math.floor((1920 - targetPortraitWidth) / 2);
+const cropRight = cropLeft + targetPortraitWidth;
+
+// Add at top with other global variables
+var isAvatarSpeakingEnded = false;
+const followuptimer = 5000;
 
 // Setup logging
 const log = msg => {
@@ -213,11 +221,14 @@ function startSessionAutomatically() {
         speechSynthesisConfig = SpeechSDK.SpeechConfig.fromSubscription(azureSpeechSubscriptionKey, azureSpeechRegion);
     }
 
-    speechSynthesisConfig.endpointId = customVoiceEndpointId;
+    // Configure for personal voice
+    //speechSynthesisConfig.speechSynthesisVoiceName = "DragonLatestNeural";
+    speechSynthesisConfig.endpointId = "8485a9ef-8730-4805-96e1-43c276be1d51";
+    // Don't set endpointId when using personal voice
+    // speechSynthesisConfig.endpointId = customVoiceEndpointId;
 
     const videoFormat = new SpeechSDK.AvatarVideoFormat();
     if (videoCrop) {
-        // Dynamically calculate cropping based on target width
         const cropLeft = Math.floor((1920 - targetPortraitWidth) / 2);
         const cropRight = cropLeft + targetPortraitWidth;
 
@@ -233,16 +244,13 @@ function startSessionAutomatically() {
     avatarSynthesizer = new SpeechSDK.AvatarSynthesizer(speechSynthesisConfig, avatarConfig);
 
     avatarSynthesizer.avatarEventReceived = function (s, e) {
-        console.log(`[Event Received]: ${e.description}`); // Log every event received
+        console.log(`[Event Received]: ${e.description}`);
         if (e.description === "AvatarStarted") {
             console.log("Avatar has started successfully.");
-    
-            generateWelcomeButton(); // Add the welcome button
+            generateWelcomeButton();
         }
     };
-    
 
-    
     const xhr = new XMLHttpRequest();
     xhr.open("GET", `https://${azureSpeechRegion}.tts.speech.microsoft.com/cognitiveservices/avatar/relay/token/v1`);
     xhr.setRequestHeader("Ocp-Apim-Subscription-Key", azureSpeechSubscriptionKey);
@@ -258,24 +266,100 @@ function startSessionAutomatically() {
         }
     });
     xhr.send();
+
+
+    avatarSynthesizer.avatarEventReceived = function (s, e) {
+        console.log(`[Event Received]: ${e.description}`);
+        
+        switch (e.description) {
+                case "AvatarStarted":
+                    console.log("Avatar has started successfully.");
+                    generateWelcomeButton();
+                    break;
+                case "SwitchToSpeaking":
+                        break;
+                case "TurnEnd":
+                    createFollowUpButtons(window.pendingFollowUpQuestions);
+                    break;
+        }
+     };
+
+     avatarSynthesizer.avatarEventReceived = function (s, e) {
+        console.log(`[Event Received]: ${e.description}`);
+        
+        switch (e.description) {
+
+        }
+    };
 }
 
-// Generate the "Hi, who are you?" button
+function originalSpeakFunction(responseText) {
+    document.getElementById('query_form').disabled = true;
+    document.getElementById('stopSpeaking').disabled = false;
+    document.getElementById('audio').muted = false;
+
+    const spokenText = responseText.replace(/\n/g, ' ');
+    const spokenSsml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts' xml:lang='en-US'>
+    <voice name='drdavidNeural'>
+        <mstts:ttsembedding speakerProfileId=''>
+            <mstts:leadingsilence-exact value='0'/>${htmlEncode(spokenText)}
+        </mstts:ttsembedding>
+    </voice>
+    </speak>`;
+
+    console.log("[" + (new Date()).toISOString() + "] Speak request sent.");
+    avatarSynthesizer.speakSsmlAsync(spokenSsml).then(
+        (result) => {
+            document.getElementById('query_form').disabled = false;
+            document.getElementById('stopSpeaking').disabled = true;
+
+
+            if (result.reason === SpeechSDK.ResultReason.SynthesizingAudioCompleted) {
+                console.log("[" + (new Date()).toISOString() + "] Speech synthesized. Result ID: " + result.resultId);
+                // Only show follow-up buttons after speech is completed
+
+                isAvatarSpeakingEnded = false;
+
+
+            } else {
+                console.log("[" + (new Date()).toISOString() + "] Speech failed. Result ID: " + result.resultId);
+                if (result.reason === SpeechSDK.ResultReason.Canceled) {
+                    console.log(SpeechSDK.CancellationDetails.fromResult(result).errorDetails);
+                }
+            }
+        }
+    ).catch(log);
+}
+
 function generateWelcomeButton() {
     const followUpContainer = document.getElementById("follow_up_questions");
+    const queryWrapper = document.getElementById("query_wrapper");
+    const queryForm = document.getElementById("query_form");
+
     followUpContainer.innerHTML = ""; // Clear existing buttons
 
+    // Initially hide the query form
+    queryForm.style.display = "none";
+
     const button = document.createElement("button");
-    button.innerText = "Hi, who are you?";
+    button.innerText = "Hello!";
     button.onclick = () => {
-        document.getElementById("user_query").value = button.innerText;
+        document.getElementById("user_query").value = "Hello, who are you?"
         submitQuery(); // Trigger the query submission
+
+        // Show the query form when the initial button is clicked
+        queryForm.style.display = "flex";
+
+        // Remove the initial welcome button
+        followUpContainer.innerHTML = "";
 
         // Ensure follow-up container remains visible
         followUpContainer.style.display = "flex";
 
-        // Show the query wrapper
-        document.getElementById("query_wrapper").style.display = "block";
+        // Show the query wrapper if it exists
+        if (queryWrapper) {
+            queryWrapper.style.display = "block";
+        }
     };
     followUpContainer.appendChild(button);
 
@@ -283,7 +367,6 @@ function generateWelcomeButton() {
     followUpContainer.style.display = "flex";
     console.log("Welcome button added.");
 }
-
 
 
 function fetchChatGPTResponse(spokenText) {
@@ -320,103 +403,105 @@ function fetchChatGPTResponse(spokenText) {
         });
 }
 
-// Function to process and make the avatar speak
-function originalSpeakFunction(responseText) {
-    if (!avatarSynthesizer) {
-        console.error("AvatarSynthesizer not initialized. Ensure startSessionAutomatically is called.");
-        return;
-    }
-
-    // Prepare SSML (Speech Synthesis Markup Language) text
-    const spokenText = responseText.replace(/\n/g, ' ');
-    const spokenSsml = `
-        <speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'>
-            <voice name='en-US-RogerNeural'>${htmlEncode(spokenText)}</voice>
-        </speak>
-    `;
-
-    console.log("Sending text to avatar:", spokenText);
-
-    avatarSynthesizer.speakSsmlAsync(spokenSsml)
-        .then(result => {
-            console.log("Speech synthesis completed:", result);
-        })
-        .catch(error => {
-            console.error("Speech synthesis error:", error);
-        });
-}
-
-
-function submitQuery() {
-    const userQuery = document.getElementById('user_query').value;
-    if (!userQuery) return; // Do nothing if the input is empty
-
-    fetch('/main', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ user_query: userQuery })
-    })
-        .then(response => response.json())
-        .then(data => {
-            // Debugging API Response
-            console.log("API Response:", data);
-
-            // Update chat history
-            const chatHistoryDiv = document.getElementById('chatbot_response');
-            chatHistoryDiv.innerHTML += `<p><strong>You:</strong> ${userQuery}</p>`;
-            chatHistoryDiv.innerHTML += `<p><strong>Avatar:</strong> ${data.response}</p>`;
-
-            // Make the avatar speak the response
-            if (data.response) {
-                originalSpeakFunction(data.response);
-            }
-
-            // Clear input field
-            document.getElementById('user_query').value = '';
-
-            // Handle follow-up questions
-            if (data.follow_up_questions && data.follow_up_questions.length > 0) {
-                console.log("Follow-Up Questions:", data.follow_up_questions); // Debugging
-                updateFollowUpQuestions(data.follow_up_questions);
-            } else {
-                console.log("No follow-up questions available."); // Debugging
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('An error occurred. Please try again.');
-        });
-}
-
-function updateFollowUpQuestions(questions) {
+function createFollowUpButtons(questions) {
     const followUpContainer = document.getElementById('follow_up_questions');
-    followUpContainer.innerHTML = ''; // Clear old buttons
-
-    console.log("Generating follow-up buttons...");
+    followUpContainer.innerHTML = '';
+    followUpContainer.style.visibility = 'hidden';
+ 
     questions.forEach(question => {
-        console.log("Creating button for:", question);
         const button = document.createElement('button');
         button.innerText = question;
         button.onclick = () => {
             document.getElementById('user_query').value = question;
-            submitQuery(); // Send the follow-up question as a query
+            submitQuery();
         };
         followUpContainer.appendChild(button);
     });
+ }
+ 
+ function submitQuery() {
+    const userQuery = document.getElementById('user_query').value;
+    if (!userQuery) return;
+ 
+    fetch('/main', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_query: userQuery })
+    })
+    .then(response => response.json())
+    .then(data => {
+        window.pendingFollowUpQuestions = data.follow_up_questions;
+        //createFollowUpButtons(data.follow_up_questions);
+        
+        if (data.response) {
+            originalSpeakFunction(data.response);
+        }
+    });
+ }
 
-    // Ensure container is visible and positioned
+function fetchAndPlayTTS(spokenText) {
+    fetch('/synthesize_audio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: spokenText }),
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.audio_url) {
+                console.log('Audio URL:', data.audio_url);
+                playTTS(data.audio_url); // Play the synthesized audio
+            } else {
+                console.error('TTS synthesis error:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching TTS audio:', error);
+        });
+}
+
+function playTTS(audioUrl) {
+    const audioElement = document.getElementById('ttsAudio');
+    audioElement.src = audioUrl;
+    audioElement.play()
+        .then(() => console.log('Audio playback started.'))
+        .catch(error => console.error('Error playing TTS audio:', error));
+}
+
+/*
+// Function to update follow-up questions with invisible buttons
+function updateFollowUpQuestions(questions) {
+    if (isAvatarSpeakingEnded) {
+        const followUpContainer = document.getElementById('follow_up_questions');
+        followUpContainer.innerHTML = '';
+        
+        questions.forEach(question => {
+            const button = document.createElement('button');
+            button.innerText = question;
+            button.onclick = () => {
+                document.getElementById('user_query').value = question;
+                submitQuery();
+            };
+            
+            // Make buttons invisible but maintain functionality
+            button.style.opacity = '0';
+            button.style.position = 'absolute';
+            button.style.pointerEvents = 'none'; // Initially disable interaction
+            
+            followUpContainer.appendChild(button);
+        });
+    }
+
+    // Container styling
     followUpContainer.style.display = "flex";
     followUpContainer.style.flexWrap = "wrap";
     followUpContainer.style.gap = "10px";
     followUpContainer.style.justifyContent = "center";
+    followUpContainer.style.position = "relative";
+    followUpContainer.style.minHeight = "50px"; // Ensure container has height even when invisible
 
-    console.log("Follow-up questions container updated and made visible.");
+    console.log("Follow-up questions container updated with invisible buttons.");
 }
-
-
-
+*/
 
 
 // Function to handle follow-up questions
@@ -438,49 +523,46 @@ function htmlEncode(text) {
     return String(text).replace(/[&<>"'\/]/g, (match) => entityMap[match]);
 }
 
+async function synthesizeAndPlayTTS(text) {
+    if (!text) {
+        console.error("Text is required for TTS synthesis.");
+        return;
+    }
 
-  
+    try {
+        // Call the Flask TTS endpoint
+        const response = await fetch('/synthesize_audio', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: text }),
+        });
 
-function originalSpeakFunction(responseText) {
-    document.getElementById('query_form').disabled = true;
-    document.getElementById('stopSpeaking').disabled = false
-    document.getElementById('audio').muted = false
+        if (!response.ok) {
+            throw new Error(`Failed to synthesize speech: ${response.statusText}`);
+        }
 
-    // Prepare spoken text by replacing \n with a space for SSML
-    let spokenText = responseText.replace(/\n/g, ' '); // Replace newline characters with spaces for SSML
+        const data = await response.json();
+        if (data.audio_url) {
+            console.log("Synthesized audio URL:", data.audio_url);
 
-    //let spokenText = responseText
-    //let ttsVoice = document.getElementById('ttsVoice').value
-    let ttsVoice = ttsVoiceName
-    //let personalVoiceSpeakerProfileID = document.getElementById('personalVoiceSpeakerProfileID').value
-    let personalVoiceSpeakerProfileID = '';
-
-    let spokenSsml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts' xml:lang='en-US'><voice name='${ttsVoice}'><mstts:ttsembedding speakerProfileId='${personalVoiceSpeakerProfileID}'><mstts:leadingsilence-exact value='0'/>${htmlEncode(spokenText)}</mstts:ttsembedding></voice></speak>`
-    console.log("[" + (new Date()).toISOString() + "] Speak request sent.")
-    avatarSynthesizer.speakSsmlAsync(spokenSsml).then(
-        (result) => {
-            document.getElementById('query_form').disabled = false
-            document.getElementById('stopSpeaking').disabled = true
-            if (result.reason === SpeechSDK.ResultReason.SynthesizingAudioCompleted) {
-                console.log("[" + (new Date()).toISOString() + "] Speech synthesized to speaker for text [ " + spokenText + " ]. Result ID: " + result.resultId)
-            } else {
-                console.log("[" + (new Date()).toISOString() + "] Unable to speak text. Result ID: " + result.resultId)
-                if (result.reason === SpeechSDK.ResultReason.Canceled) {
-                    let cancellationDetails = SpeechSDK.CancellationDetails.fromResult(result)
-                    console.log(cancellationDetails.reason)
-                    if (cancellationDetails.reason === SpeechSDK.CancellationReason.Error) {
-                        console.log(cancellationDetails.errorDetails)
-                    }
-                }
-            }
-        }).catch(log);
+            // Play the synthesized audio
+            const audio = new Audio(data.audio_url);
+            audio.play()
+                .then(() => console.log("Audio playback started."))
+                .catch((error) => console.error("Error playing audio:", error));
+        } else {
+            console.error("Audio synthesis failed:", data.error);
+        }
+    } catch (error) {
+        console.error("Error in TTS synthesis:", error);
+    }
 }
+
 
 window.speak = (spokenText) => {
     //fetchChatGPTResponse(spokenText);  // Fetch ChatGPT response
     originalSpeakFunction(spokenText);  // Fetch ChatGPT response
 };
-
 
 window.stopSpeaking = () => {
     document.getElementById('stopSpeaking').disabled = true

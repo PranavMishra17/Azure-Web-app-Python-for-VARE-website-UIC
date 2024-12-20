@@ -1,0 +1,37 @@
+create projectId
+curl -v -X PUT -H "Ocp-Apim-Subscription-Key: 18f978cca70246309254196a93ce34b4" -H "Content-Type: application/json" -d '{
+  "description": "Dr David personal voice project for VARE Labs.",
+  "kind": "PersonalVoice"
+} '  "https://eastus.api.cognitive.microsoft.com/customvoice/projects/varewebsitevoice?api-version=2024-02-01-preview"
+
+add consent file
+curl -v -X POST -H "Ocp-Apim-Subscription-Key: 18f978cca70246309254196a93ce34b4" -F 'description="Consent for Dr David voice"' -F 'projectId="varewebsitevoice"' -F 'voiceTalentName="David Avenetti"' -F 'companyName="University of Illinois at Chicago"' -F 'audiodata=@"C:\Users\prana\Desktop\VARE\cognitive-services-speech-sdk-master\samples\js\browser\avatar\vare-labs-ivory4\src\msdocs-python-flask-webapp-quickstart\static\david-consent.mp3"' -F 'locale="en-US"' "https://eastus.api.cognitive.microsoft.com/customvoice/consents/davidConsentId?api-version=2024-02-01-preview"
+{
+  "status": "NotStarted",
+  "lastActionDateTime": "2024-12-19T06:49:58.917Z",
+  "id": "davidConsentId",
+  "displayName": "davidConsentId",
+  "description": "Consent for Dr David voice",
+  "createdDateTime": "2024-12-19T06:49:58.917Z",
+  "voiceTalentName": "David Avenetti",
+  "companyName": "University of Illinois at Chicago",
+  "locale": "en-US",
+  "projectId": "varewebsitevoice"
+* Connection #0 to host eastus.api.cognitive.microsoft.com left intact
+}pranavmishra_fc17 [ ~ ]$ 
+
+Create personal voice command
+curl -v -X POST -H "Ocp-Apim-Subscription-Key: 18f978cca70246309254196a93ce34b4" -F 'projectId="varewebsitevoice"' -F 'consentId="davidConsentId"' -F 'audiodata=@/home/pranavmishra_fc17/david-consent.mp3' -F 'audiodata=@"D:\PersonalVoiceTest\CNVSample002.wav"' "
+https://eastus.api.cognitive.microsoft.com/customvoice/personalvoices/JessicaPersonalVoiceId?api-version=2024-02-01-preview"
+
+{
+  "projectId": "varewebsitevoice",
+  "consentId": "davidConsentId",
+  "speakerProfileId": "6e315503-b996-485a-8bd7-9f22da3d2ecf",
+  "status": "NotStarted",
+  "lastActionDateTime": "2024-12-19T06:55:17.440Z",
+  "id": "davidPersonalVoiceId",
+  "displayName": "davidPersonalVoiceId",
+  "createdDateTime": "2024-12-19T06:55:17.440Z"
+* Connection #0 to host eastus.api.cognitive.microsoft.com left intact
+}pranavmishra_fc17 [ ~ ]$ 

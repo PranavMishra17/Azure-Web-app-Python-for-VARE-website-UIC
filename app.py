@@ -11,6 +11,7 @@ import time
 import subprocess
 import getpass
 import re
+from pinecone import ServerlessSpec
 
 #load_dotenv()
 
@@ -133,14 +134,23 @@ def clean_questions(questions):
 
 from flask import url_for
 
-from flask import Flask, render_template_string, request, jsonify
-
 from flask import Flask, render_template, render_template_string, request, jsonify
-
+import uuid
+import azure.cognitiveservices.speech as speechsdk
 import os
 
 from flask import (Flask, redirect, render_template, request,
                    send_from_directory, url_for)
+
+# Azure Speech Configuration
+SPEECH_KEY = "18f978cca70246309254196a93ce34b4"
+SERVICE_REGION = "eastus"
+VOICE_NAME = "drdavidNeural"
+
+# Path to store synthesized audio files
+STATIC_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
+os.makedirs(STATIC_FOLDER, exist_ok=True)
+
 
 app = Flask(__name__)
 
@@ -158,6 +168,13 @@ def index():
 def favicon():
     return send_from_directory(os.path.join(app.root_path, 'static'),
                                'favicon.ico', mimetype='image/vnd.microsoft.icon')
+
+
+
+@app.route('/static/<path:filename>')
+def serve_audio(filename):
+    return send_from_directory(STATIC_FOLDER, filename, mimetype='audio/mpeg')
+
 
 # Route for the main page
 @app.route('/main', methods=['GET', 'POST'])
