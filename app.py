@@ -49,6 +49,7 @@ if index_name not in existing_indexes:
         time.sleep(1)
 
 index = pc.Index(index_name)
+
 vectorstore = PineconeVectorStore(index=index, embedding=embeddings, text_key="text")
 retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 2})
 
