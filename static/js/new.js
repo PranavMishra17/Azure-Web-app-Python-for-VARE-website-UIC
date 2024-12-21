@@ -243,14 +243,6 @@ function startSessionAutomatically() {
     avatarConfig.backgroundColor = backgroundColor;
     avatarSynthesizer = new SpeechSDK.AvatarSynthesizer(speechSynthesisConfig, avatarConfig);
 
-    avatarSynthesizer.avatarEventReceived = function (s, e) {
-        console.log(`[Event Received]: ${e.description}`);
-        if (e.description === "AvatarStarted") {
-            console.log("Avatar has started successfully.");
-            generateWelcomeButton();
-        }
-    };
-
     const xhr = new XMLHttpRequest();
     xhr.open("GET", `https://${azureSpeechRegion}.tts.speech.microsoft.com/cognitiveservices/avatar/relay/token/v1`);
     xhr.setRequestHeader("Ocp-Apim-Subscription-Key", azureSpeechSubscriptionKey);
@@ -268,29 +260,51 @@ function startSessionAutomatically() {
     xhr.send();
 
 
+
     avatarSynthesizer.avatarEventReceived = function (s, e) {
         console.log(`[Event Received]: ${e.description}`);
-        
+        const followUpContainer = document.getElementById('follow_up_questions');
+    
         switch (e.description) {
-                case "AvatarStarted":
-                    console.log("Avatar has started successfully.");
-                    generateWelcomeButton();
-                    break;
-                case "SwitchToSpeaking":
-                        break;
+            case "SwitchToIdle":
+                console.log("[Event Received]: SwitchToIdle - Removing existing buttons.");
+                // Store current questions and clear buttons
+                const currentQuestions = Array.from(followUpContainer.children).map(button => button.innerText);
+                window.previousFollowUpQuestions = currentQuestions;
+                followUpContainer.innerHTML = ''; // Remove buttons
+                console.log("[SwitchToIdle]: Stored questions:", currentQuestions);
+                break;
+    
                 case "TurnEnd":
-                    createFollowUpButtons(window.pendingFollowUpQuestions);
+                    console.log("[Event Received]: TurnEnd - Avatar finished speaking.");
+                    // Fetch follow-up questions if not already available
+                    if (!window.pendingFollowUpQuestions || window.pendingFollowUpQuestions.length === 0) {
+                        console.log("[TurnEnd]: Fetching follow-up questions from server.");
+                        fetch('/get_follow_ups')
+                            .then(response => response.json())
+                            .then(data => {
+                                window.pendingFollowUpQuestions = data.follow_up_questions || [];
+                                const allQuestions = (window.previousFollowUpQuestions || []).concat(window.pendingFollowUpQuestions);
+                                console.log("[TurnEnd]: Creating buttons for all questions:", allQuestions);
+                                createFollowUpButtons(allQuestions);
+                            })
+                            .catch(error => {
+                                console.error("[TurnEnd]: Error fetching follow-up questions:", error);
+                            });
+                    } else {
+                        const allQuestions = (window.previousFollowUpQuestions || []).concat(window.pendingFollowUpQuestions);
+                        console.log("[TurnEnd]: Creating buttons for all questions:", allQuestions);
+                        createFollowUpButtons(allQuestions);
+                    }
                     break;
-        }
-     };
-
-     avatarSynthesizer.avatarEventReceived = function (s, e) {
-        console.log(`[Event Received]: ${e.description}`);
-        
-        switch (e.description) {
-
+                
+    
+            default:
+                console.log(`[Unhandled Event]: ${e.description}`);
+                break;
         }
     };
+    
 }
 
 function originalSpeakFunction(responseText) {
@@ -403,26 +417,41 @@ function fetchChatGPTResponse(spokenText) {
         });
 }
 
+// Modify createFollowUpButtons to initially hide the container
 function createFollowUpButtons(questions) {
+    console.log("[Function Call]: createFollowUpButtons");
     const followUpContainer = document.getElementById('follow_up_questions');
-    followUpContainer.innerHTML = '';
-    followUpContainer.style.visibility = 'hidden';
- 
-    questions.forEach(question => {
+    followUpContainer.innerHTML = ''; // Clear any existing buttons
+
+    if (!questions || questions.length === 0) {
+        console.log("[createFollowUpButtons]: No questions provided.");
+        return;
+    }
+
+    questions.forEach((question, index) => {
         const button = document.createElement('button');
         button.innerText = question;
         button.onclick = () => {
+            console.log(`[Button Clicked]: ${question}`);
             document.getElementById('user_query').value = question;
             submitQuery();
         };
         followUpContainer.appendChild(button);
+        console.log(`[createFollowUpButtons]: Button created for question ${index + 1}.`);
     });
- }
+
+    followUpContainer.style.display = 'flex'; // Make sure the container is visible
+    console.log("[createFollowUpButtons]: All buttons added to the container.");
+}
  
- function submitQuery() {
+function submitQuery() {
     const userQuery = document.getElementById('user_query').value;
-    if (!userQuery) return;
- 
+    if (!userQuery) {
+        console.log("[submitQuery]: No user query provided.");
+        return;
+    }
+
+    console.log(`[submitQuery]: Sending query: ${userQuery}`);
     fetch('/main', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -430,14 +459,20 @@ function createFollowUpButtons(questions) {
     })
     .then(response => response.json())
     .then(data => {
-        window.pendingFollowUpQuestions = data.follow_up_questions;
-        //createFollowUpButtons(data.follow_up_questions);
+        console.log("[submitQuery]: Response received from server.");
+        window.pendingFollowUpQuestions = data.follow_up_questions || [];
         
         if (data.response) {
+            console.log("[submitQuery]: Starting avatar speech synthesis.");
             originalSpeakFunction(data.response);
+        } else {
+            console.log("[submitQuery]: No response from server.");
         }
+    })
+    .catch(error => {
+        console.error(`[submitQuery]: Error: ${error.message}`);
     });
- }
+}
 
 function fetchAndPlayTTS(spokenText) {
     fetch('/synthesize_audio', {
@@ -466,42 +501,6 @@ function playTTS(audioUrl) {
         .then(() => console.log('Audio playback started.'))
         .catch(error => console.error('Error playing TTS audio:', error));
 }
-
-/*
-// Function to update follow-up questions with invisible buttons
-function updateFollowUpQuestions(questions) {
-    if (isAvatarSpeakingEnded) {
-        const followUpContainer = document.getElementById('follow_up_questions');
-        followUpContainer.innerHTML = '';
-        
-        questions.forEach(question => {
-            const button = document.createElement('button');
-            button.innerText = question;
-            button.onclick = () => {
-                document.getElementById('user_query').value = question;
-                submitQuery();
-            };
-            
-            // Make buttons invisible but maintain functionality
-            button.style.opacity = '0';
-            button.style.position = 'absolute';
-            button.style.pointerEvents = 'none'; // Initially disable interaction
-            
-            followUpContainer.appendChild(button);
-        });
-    }
-
-    // Container styling
-    followUpContainer.style.display = "flex";
-    followUpContainer.style.flexWrap = "wrap";
-    followUpContainer.style.gap = "10px";
-    followUpContainer.style.justifyContent = "center";
-    followUpContainer.style.position = "relative";
-    followUpContainer.style.minHeight = "50px"; // Ensure container has height even when invisible
-
-    console.log("Follow-up questions container updated with invisible buttons.");
-}
-*/
 
 
 // Function to handle follow-up questions

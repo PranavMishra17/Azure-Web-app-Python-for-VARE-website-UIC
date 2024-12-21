@@ -181,6 +181,7 @@ def serve_audio(filename):
 @app.route('/main', methods=['GET', 'POST'])
 def main_page():
     global chat_history
+    global pending_follow_up_questions  # Store follow-up questions temporarily
     follow_up_questions = []
     response = None
 
@@ -190,27 +191,35 @@ def main_page():
 
         if user_query:
             try:
-                # Example logic to process user query
+                # Process user query
                 result_primary = qa_chain_primary.apply([{"question": user_query, "chat_history": chat_history}])[0]
                 response = result_primary['answer']
                 chat_history.append((user_query, response))
 
                 cleaned_response = re.sub(r'^Avatar:\s*', '', response)
 
+                # Generate follow-up questions and store them temporarily
                 top_chunks = retriever_Q.get_relevant_documents(response)
                 follow_up_questions = clean_questions([chunk.page_content for chunk in top_chunks])
+                pending_follow_up_questions = follow_up_questions  # Save for later
 
-                print("Follow-Up Questions:", follow_up_questions)
+                print("Follow-Up Questions Stored:", follow_up_questions)
                 
-                return jsonify({"response": cleaned_response, "follow_up_questions": follow_up_questions})
+                return jsonify({"response": cleaned_response})
             except Exception as e:
                 print(f"Error processing query: {e}")
                 return jsonify({"error": str(e)}), 500
 
         return jsonify({"error": "No user query provided"}), 400
 
-    # Serve the index.html page for GET requests
     return render_template('index.html', response=None, follow_up_questions=follow_up_questions, chat_history=chat_history)
+
+@app.route('/get_follow_ups', methods=['GET'])
+def get_follow_up_questions():
+    """Serve follow-up questions when requested."""
+    global pending_follow_up_questions
+    return jsonify({"follow_up_questions": pending_follow_up_questions or []})
+
 
 if __name__ == '__main__':
     #app.run(debug=True, host ='0.0.0.0', port=8000)
