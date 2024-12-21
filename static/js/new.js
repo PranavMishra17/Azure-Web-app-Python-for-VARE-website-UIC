@@ -193,20 +193,6 @@ function makeBackgroundTransparent(timestamp) {
     window.requestAnimationFrame(makeBackgroundTransparent)
 }
 
-// Do HTML encoding on given text
-function htmlEncode(text) {
-    const entityMap = {
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;',
-        '/': '&#x2F;'
-    };
-
-    return String(text).replace(/[&<>"'\/]/g, (match) => entityMap[match])
-}
-
 function startSessionAutomatically() {
     generateWelcomeButton(); 
 
@@ -382,41 +368,6 @@ function generateWelcomeButton() {
     console.log("Welcome button added.");
 }
 
-
-function fetchChatGPTResponse(spokenText) {
-    fetch('http://localhost:5000/chat', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ text: spokenText })
-    })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok.');
-            }
-            return response.json();
-        })
-        .then(data => {
-            console.log("Received data:", data); // Log the received data
-            if (data.response) {
-                // Remove "Avatar:" prefix if present
-                let cleanedResponse = data.response.replace(/^Avatar:\s*/, "");
-                
-                document.getElementById('apiResponse').value = cleanedResponse;
-                
-                // Pass the cleaned response text to originalSpeakFunction
-                originalSpeakFunction(cleanedResponse);
-            } else {
-                throw new Error('No response data found or unexpected structure.');
-            }
-        })
-        .catch(error => {
-            console.error('Fetch error:', error);
-            alert('Error: ' + error.message);
-        });
-}
-
 // Modify createFollowUpButtons to initially hide the container
 function createFollowUpButtons(questions) {
     console.log("[Function Call]: createFollowUpButtons");
@@ -472,34 +423,6 @@ function submitQuery() {
     .catch(error => {
         console.error(`[submitQuery]: Error: ${error.message}`);
     });
-}
-
-function fetchAndPlayTTS(spokenText) {
-    fetch('/synthesize_audio', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: spokenText }),
-    })
-        .then(response => response.json())
-        .then(data => {
-            if (data.audio_url) {
-                console.log('Audio URL:', data.audio_url);
-                playTTS(data.audio_url); // Play the synthesized audio
-            } else {
-                console.error('TTS synthesis error:', data.error);
-            }
-        })
-        .catch(error => {
-            console.error('Error fetching TTS audio:', error);
-        });
-}
-
-function playTTS(audioUrl) {
-    const audioElement = document.getElementById('ttsAudio');
-    audioElement.src = audioUrl;
-    audioElement.play()
-        .then(() => console.log('Audio playback started.'))
-        .catch(error => console.error('Error playing TTS audio:', error));
 }
 
 

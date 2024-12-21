@@ -1,19 +1,13 @@
-from flask import Flask, render_template, render_template_string, request
+from flask import Flask, render_template, request
 from langchain.chains import ConversationalRetrievalChain
 from langchain.prompts import PromptTemplate
 from langchain_openai import AzureChatOpenAI, AzureOpenAIEmbeddings
 from langchain_pinecone import Pinecone as PineconeVectorStore
 import os
-#from dotenv import load_dotenv
 from pinecone import Pinecone
-from langchain.chains import LLMChain
 import time
-import subprocess
-import getpass
 import re
 from pinecone import ServerlessSpec
-
-#load_dotenv()
 
 app = Flask(__name__)
 
@@ -133,15 +127,7 @@ def clean_questions(questions):
     return cleaned_questions
 
 
-from flask import url_for
-
-from flask import Flask, render_template, render_template_string, request, jsonify
-import uuid
-import azure.cognitiveservices.speech as speechsdk
-import os
-
-from flask import (Flask, redirect, render_template, request,
-                   send_from_directory, url_for)
+from flask import Flask, render_template, request, jsonify, send_from_directory
 
 # Azure Speech Configuration
 SPEECH_KEY = "18f978cca70246309254196a93ce34b4"
@@ -170,12 +156,9 @@ def favicon():
     return send_from_directory(os.path.join(app.root_path, 'static'),
                                'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
-
-
 @app.route('/static/<path:filename>')
 def serve_audio(filename):
     return send_from_directory(STATIC_FOLDER, filename, mimetype='audio/mpeg')
-
 
 # Route for the main page
 @app.route('/main', methods=['GET', 'POST'])
