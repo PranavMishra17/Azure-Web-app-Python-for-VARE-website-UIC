@@ -3,9 +3,6 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <meta name="session_id" content="{{ session_id }}">
-    <meta name="user_id" content="{{ session['user_id'] }}">
-
     <title>RAG Chatbot Interface</title>
     <div id="logging" style="display: none;"></div>
 
@@ -320,75 +317,16 @@
     content: "...";
   }
 }
-.download-btn {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    z-index: 1000;
-    background-color: rgba(0, 0, 0, 0.065);
-    border: none;
-    border-radius: 5px;
-    padding: 8px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    width: 36px;  /* Initial width to fit just the icon */
-    overflow: hidden;
-}
 
-.download-btn:hover {
-    background-color: rgba(0, 0, 0, 0.6);
-    width: 120px;  /* Expanded width to show text */
-}
 
-.download-btn svg {
-    width: 20px;
-    height: 20px;
-    fill: white;
-    flex-shrink: 0;  /* Prevent icon from shrinking */
-}
-
-.download-btn span {
-    color: white;
-    font-size: 14px;
-    white-space: nowrap;  /* Prevent text wrapping */
-    opacity: 0;  /* Hide text by default */
-    transition: opacity 0.3s ease;
-}
-
-.download-btn:hover span {
-    opacity: 1;  /* Show text on hover */
-}
 
     </style>
-    <script>
-      document.addEventListener('DOMContentLoaded', function() {
-          const sessionIdMeta = document.querySelector('meta[name="session_id"]');
-          const sessionId = sessionIdMeta ? sessionIdMeta.getAttribute('content') : null;
-          
-          if (sessionId) {
-              console.log(`[DEBUG] Session ID from meta tag: ${sessionId}`);
-              
-              // Ensure URL includes session ID
-              const currentUrl = new URL(window.location.href);
-              if (!currentUrl.searchParams.has('session_id')) {
-                  currentUrl.searchParams.set('session_id', sessionId);
-                  window.history.replaceState({}, '', currentUrl.toString());
-                  console.log(`[DEBUG] Session ID appended to URL: ${currentUrl}`);
-              }
-          } else {
-              console.error("[ERROR] Session ID is missing! Check Flask backend or HTML template.");
-          }
-      });
-    </script>
-        
+    
     <!-- Include Azure Speech SDK -->
     <script src="https://aka.ms/csspeech/jsbrowserpackageraw"></script>
 
     <!-- Include the JavaScript file -->
-    <script src="{{ url_for('static', filename='js/new.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/avatar.js') }}"></script>
     <script>
     function toggleChatPanel() {
       const chatPanel = document.getElementById('chatPanel');
@@ -406,49 +344,13 @@
         const userQuery = document.getElementById('user_query').value;
         if (!userQuery) return;
 
-        fetch('/main', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_query: userQuery })
-        })
-        .then(response => response.json())
-        .then(data => {
-          // Update chat history
-          const chatHistoryDiv = document.getElementById('chatbot_response');
-          chatHistoryDiv.innerHTML += `<p><strong>You:</strong> ${userQuery}</p>`;
-          chatHistoryDiv.innerHTML += `<p><strong>Avatar:</strong> ${data.response}</p>`;
-
           // Make the avatar speak
-          if (data.response) {
-
-            originalSpeakFunction(data.response);
-            //originalSpeakFunction(userQuery);
-
-
+          if (userQuery) {
+            originalSpeakFunction(userQuery);
           }
 
           // Clear input field
           document.getElementById('user_query').value = '';
-
-          // Update follow-up questions
-          const followUpContainer = document.getElementById('follow_up_questions');
-          followUpContainer.innerHTML = '';
-          if (data.follow_up_questions) {
-            data.follow_up_questions.forEach(question => {
-              const button = document.createElement('button');
-              button.innerText = question;
-              button.onclick = () => {
-                document.getElementById('user_query').value = question;
-                submitQuery();
-              };
-              followUpContainer.appendChild(button);
-            });
-          }
-
-          
-          // end here
-        })
-        .catch(error => console.error('Error:', error));
       }
     </script>
   </head>
@@ -458,12 +360,6 @@
 <div class="left-column">
   <!-- Live video -->
   <div id="videoContainer" style="position: relative;">
-    <button id="downloadBtn" class="download-btn" onclick="downloadChatHistory()">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-          <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
-      </svg>
-      <span>Save Chat</span>
-  </button>
 <!-- Loading Overlay -->
 <div id="loadingOverlay" 
      style="position: absolute; 
@@ -521,16 +417,9 @@
 <!-- Input form -->
 <!-- Input form -->
 <div id="query_form" style="display: none; width: 100%; max-width: 400px; margin: 0 auto; text-align: center;">
-  <input 
-    id="user_query" 
-    name="user_query" 
-    placeholder="If you have other questions, ask here." 
-    style="width: 70%;" 
-    onkeydown="if (event.key === 'Enter') { event.preventDefault(); showThinkingBubble(); hideButtons(); submitQuery(); }"
-  />
+  <input id="user_query" name="user_query" placeholder="If you have other questions, ask here." style="width: 70%;" />
   <button type="submit" onclick="showThinkingBubble(); hideButtons(); submitQuery()">Submit</button>
 </div>
-
     </div>
   
     <!-- Chat Panel -->
@@ -551,52 +440,7 @@
     <div id="audioContainer">
       <audio id="audioPlayer" controls></audio>
     </div>
-
-    <script>
-    function downloadChatHistory() {
-        // Get session and user IDs from meta tags
-        const sessionId = document.querySelector('meta[name="session_id"]').getAttribute('content');
-        const userId = document.querySelector('meta[name="user_id"]').getAttribute('content');
-        
-        // Get chat history from the chatbot_response div
-        const chatHistoryDiv = document.getElementById('chatbot_response');
-        const chatMessages = [];
-        
-        // Parse the chat messages
-        Array.from(chatHistoryDiv.children).forEach(paragraph => {
-            const role = paragraph.querySelector('strong').textContent.replace(':', '').trim();
-            const message = paragraph.textContent.replace(role + ':', '').trim();
-            chatMessages.push({ role, message });
-        });
-        
-        // Create the data object
-        const chatData = {
-            sessionId: sessionId,
-            userId: userId,
-            timestamp: new Date().toISOString(),
-            chatHistory: chatMessages
-        };
-        
-        // Convert to JSON and create blob
-        const jsonString = JSON.stringify(chatData, null, 2);
-        const blob = new Blob([jsonString], { type: 'application/json' });
-        
-        // Create download link
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `chat_history_${sessionId}.json`;
-        
-        // Trigger download
-        document.body.appendChild(a);
-        a.click();
-        
-        // Cleanup
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }
-    </script>
-
+  
     <script>
       // JavaScript function to toggle chatbox visibility
       function toggleChatPanel() {

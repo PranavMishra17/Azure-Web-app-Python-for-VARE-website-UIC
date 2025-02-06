@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="session_id" content="{{ session_id }}">
     <title>Welcome to the Dental Hygiene Clinic</title>
     <style>
 body {
@@ -94,7 +95,29 @@ p {
     background-image: url('/static/back1.jpg');
   }
 }
-    </style>
+
+.user-id-display {
+            padding: 10px;
+            margin: 10px 0;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 5px;
+            color: white;
+            font-size: 16px;
+            width: 200px;
+            text-align: center;
+            pointer-events: none;
+            user-select: none;
+        }
+
+        .user-info {
+            margin: 15px 0;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 5px;
+            display: inline-block;
+        }
+</style>
   </head>
   <body>
     <div class="background-image"></div>
@@ -103,9 +126,32 @@ p {
       <h1>Welcome to the</h1>
       <h1>Dental Hygiene Clinic</h1>
       <p>Providing professional dental care for children</p>
-      <form action="/main">
-        <button type="submit" class="start-button">START</button>
+
+      <!-- User ID Form -->
+      <form id="startForm" method="POST" action="/start">
+        <div class="user-info">
+            <div>Participant ID:</div>
+            <input type="text" id="user_id" name="user_id" class="user-id-display" readonly>
+        </div>
+        <button type="submit" class="start-button">Start</button>
       </form>
     </div>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const userId = urlParams.get('user_id');
+        const userIdField = document.getElementById('user_id');
+        
+        if (userId) {
+            // Set the user ID from URL
+            userIdField.value = userId;
+        } else {
+            // Set default ID and show notification
+            userIdField.value = "00001";
+            alert('No participant ID was provided. Using default ID: 00001');
+        }
+    });
+    </script>
   </body>
 </html>

@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Available Avatars</title>
+    <style>
+    /* Container Layout */
+    .container {
+    max-width: 1200px;
+    margin: 0 auto;  /* Centers the whole container */
+    padding: 20px;
+}
+
+/* Grid Layout for Blocks */
+.grid {
+    display: flex;
+    flex-direction: row;  /* Makes items horizontal */
+    flex-wrap: wrap;      /* Allows wrapping to next row */
+    gap: 20px;
+    justify-content: center;  /* Centers the blocks */
+}
+
+/* Create Avatar Block */
+.create-avatar {
+    width: 100%;  /* Takes full width */
+    max-width: 800px;  /* Limits width for larger screens */
+    margin: 0 auto 20px;  /* Centers this block and adds bottom margin */
+    background: #f8f9fa;
+    border: 2px dashed #dee2e6;
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+}
+
+.avatar-container {
+    display: flex; /* Ensures elements are placed in a row */
+    flex-wrap: wrap; /* Wrap to next row if not enough space */
+    gap: 20px; /* Adds space between avatars */
+    justify-content: center; /* Centers the avatars */
+}
+.avatar-block {
+    flex: 1 1 calc(25% - 20px); /* Makes sure there are 4 per row */
+    min-width: 250px;
+    max-width: 300px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 15px;
+    box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
+    text-align: center;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.avatar-block:hover {
+    transform: translateY(-5px);
+    box-shadow: 4px 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+    
+    
+    .create-avatar:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+
+    
+
+    /* Avatar Header & Image */
+    .avatar-header {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 15px;
+    }
+    
+    .avatar-image {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        object-fit: cover;
+    }
+    
+    /* Avatar Text Styles */
+    .avatar-title {
+        flex-grow: 1;
+    }
+    
+    .avatar-name {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: bold;
+    }
+    
+    .avatar-version {
+        color: #6c757d;
+        margin: 5px 0;
+        font-size: 0.9rem;
+    }
+    
+    .avatar-description {
+        color: #495057;
+        margin-bottom: 15px;
+        font-size: 0.95rem;
+        line-height: 1.5;
+    }
+    
+    /* Button Styles */
+    .btn {
+        display: inline-block;
+        padding: 10px 16px;
+        border-radius: 5px;
+        border: none;
+        cursor: pointer;
+        text-align: center;
+        width: 100%;
+        transition: background-color 0.3s ease;
+    }
+    
+    .btn-primary {
+        background-color: #007bff;
+        color: white;
+    }
+    
+    .btn-primary:hover {
+        background-color: #0056b3;
+    }
+    
+    .btn-success {
+        background-color: #28a745;
+        color: white;
+    }
+    
+    .btn-success:hover {
+        background-color: #218838;
+    }
+    
+    /* Loading State */
+    .loading {
+        width: 100%;
+        text-align: center;
+        padding: 20px;
+        color: #6c757d;
+    }
+    
+/* Rest of your CSS remains the same, just update the media queries */
+@media (max-width: 1200px) {
+    .container {
+        padding: 15px;
+    }
+    .avatar-block {
+        width: 260px;
+    }
+}
+
+@media (max-width: 900px) {
+    .avatar-block {
+        width: 240px;
+    }
+}
+
+@media (max-width: 600px) {
+    .avatar-block {
+        width: 100%;
+        max-width: 320px;
+    }
+}
+
+.dental-avatar {
+    width: 300px;
+    background: #f5f8fd; /* Light blue medical theme */
+    border: 2px solid #b0c4de;
+    border-radius: 15px;
+    padding: 20px;
+    text-align: center;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.dental-avatar:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.dental-avatar-image {
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #4682b4; /* Steel Blue border */
+}
+
+.dental-avatar-name {
+    font-size: 1.3rem;
+    font-weight: bold;
+    margin: 10px 0;
+}
+
+.dental-avatar-description {
+    color: #444;
+    font-size: 0.95rem;
+    margin-bottom: 15px;
+    padding: 0 10px;
+}
+
+.dental-avatar-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9rem;
+    color: #666;
+    font-weight: bold;
+    margin-top: 10px;
+}
+
+.dental-btn {
+    background-color: #007bff;
+    color: white;
+    padding: 8px 15px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background-color 0.3s ease;
+}
+
+.dental-btn:hover {
+    background-color: #0056b3;
+}
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Create Avatar Block -->
+        <div class="create-avatar">
+            <img src='/static/images/def.png' alt="Create Avatar" class="avatar-image">
+            <h2>Create Your Own Avatar</h2>
+            <p>Build a custom RAG-powered avatar with your own knowledge base</p>
+            <form action="/create_avatar" method="get">
+                <button type="submit" class="btn btn-success">Create Avatar</button>
+            </form>
+        </div>
+    
+        <!-- Grid for Avatar Blocks -->
+        <div class="grid">
+            <!-- Loading placeholder -->
+            <div id="loading" class="loading">
+                Loading available avatars...
+            </div>
+    
+            <!-- Avatar blocks container -->
+            <div id="avatarContainer"></div>
+            <div class="dental-avatar">
+                <div class="dental-avatar-content">
+                    <img src="/static/images/dr-david-avenetti.png" alt="Dental Hygiene Expert" class="dental-avatar-image">
+                    <h3 class="dental-avatar-name">Dental Hygiene Expert</h3>
+                    <p class="dental-avatar-description">
+                        Providing professional dental care for children with a focus on preventative treatments.
+                    </p>
+                    <div class="dental-avatar-footer">
+                        <span class="dental-avatar-profession">Dr. David Avenetti</span>
+                        <button onclick="startDentalConversation()" class="dental-btn">Start Conversation</button>
+                    </div>
+                </div>
+            </div>
+            
+            
+        </div>
+    </div>
+
+    <script>
+
+function startDentalConversation() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const userId = urlParams.get('userid');
+    window.location.href = `/start${userId ? '?user_id=' + userId : ''}`;
+}
+
+async function fetchAvatars() {
+    try {
+        const response = await fetch('/get_avatars');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        
+        const container = document.getElementById('avatarContainer');
+        if (!container) {
+            throw new Error('Avatar container not found!');
+        }
+        
+        document.getElementById('loading').style.display = 'none';
+
+        data.avatars.forEach(avatar => {
+            const block = createAvatarBlock(avatar);
+            container.appendChild(block);
+        });
+    } catch (error) {
+        console.error('Error fetching avatars:', error);
+        const loadingElement = document.getElementById('loading');
+        if (loadingElement) {
+            loadingElement.textContent = 'Error loading avatars: ' + error.message;
+        }
+    }
+}
+
+    //fetchAvatars();
+
+function createAvatarBlock(avatar) {
+    const div = document.createElement('div');
+    div.className = 'avatar-block';
+    
+    // Get avatar image based on version
+    const avatarImage = getAvatarImage(avatar.avatar_version);
+
+    div.innerHTML = `
+        <div class="avatar-header">
+            <img src="${avatarImage}" alt="${avatar.avatar_name}" class="avatar-image">
+            <div class="avatar-title">
+                <h3 class="avatar-name">${avatar.avatar_name}</h3>
+                <div class="avatar-version">${avatar.avatar_version}</div>
+            </div>
+        </div>
+        <div class="avatar-description">${avatar.avatar_description}</div>
+        <button onclick="startConversation('${avatar.category_id}')" class="btn btn-primary">Start Conversation</button>
+    `;
+    return div;
+}
+
+
+        function getAvatarImage(version) {
+            // You can replace these with actual image URLs
+            const images = {
+                'dr-david-avenetti': '/static/images/dr-david-avenetti.png',
+                'prof-zalake': '/static/images/professor-business.png',
+                'lisa-casual': '/static/images/lisa-casual.png',
+                'max-business': '/static/images/max-business.png'
+            };
+            return images[version] || '/api/placeholder/80/80';
+        }
+
+        function startConversation(categoryId) {
+            const avatarBlock = event.target.closest('.avatar-block');
+            const avatarName = avatarBlock.querySelector('.avatar-name').textContent;
+            const avatarVersion = avatarBlock.querySelector('.avatar-version').textContent;
+            const avatarDescription = avatarBlock.querySelector('.avatar-description').textContent;
+
+            const url = `/avatar-conv.html?categoryId=${encodeURIComponent(categoryId)}&version=${encodeURIComponent(avatarVersion)}&name=${encodeURIComponent(avatarName)}&description=${encodeURIComponent(avatarDescription)}`;
+            window.location.href = url;
+        }
+        // Load avatars when page loads
+        document.addEventListener('DOMContentLoaded', fetchAvatars);
+    </script>
+</body>
+</html>

@@ -153,7 +153,6 @@ function initializeSpeechSDK() {
 
 // Function to start the loading bar animation
 function startLoadingBar() {
-    document.getElementById('downloadBtn').style.display = 'none';   // To hide
     const loadingBar = document.getElementById("loadingProgress");
     let progress = 0;
 
@@ -242,32 +241,6 @@ function startSessionAutomatically() {
 
     generateWelcomeButton(); 
 
-    // Retrieve session ID from the meta tag
-    // Retrieve session ID and user ID from meta tags
-    const sessionId = document.querySelector('meta[name="session_id"]').getAttribute('content');
-    const userId = document.querySelector('meta[name="user_id"]').getAttribute('content');
-
-    if (sessionId) {
-        console.log(`[DEBUG] Session ID: ${sessionId}`);
-    } else {
-        console.error("[ERROR] Session ID is missing!");
-    }
-
-    if (userId) {
-        console.log(`[DEBUG] User ID: ${userId}`);
-    } else {
-        console.error("[ERROR] User ID is missing!");
-    }
-
-    // Append the session ID to the URL if necessary
-    const currentUrl = new URL(window.location.href);
-    if (sessionId && !currentUrl.searchParams.has('session_id')) {
-        currentUrl.searchParams.set('session_id', sessionId);
-        window.history.replaceState({}, '', currentUrl.toString());
-        console.log(`[DEBUG] Session ID appended to URL: ${currentUrl}`);
-    }
-    
-
     let speechSynthesisConfig;
 
     if (usePrivateEndpoint && privateEndpointUrl !== "") {
@@ -334,48 +307,16 @@ function startSessionAutomatically() {
                 break;
 
             case "TurnStart":
-                console.log("[Event Received]: TurnStart - Fetching and updating follow-up questions.");
-                fetch('/get_follow_ups')
-                    .then(response => response.json())
-                    .then(data => {
-                        window.pendingFollowUpQuestions = data.follow_up_questions || [];
-                        console.log("[TurnStart]: Updated follow-up questions:", window.pendingFollowUpQuestions);
-                        //createFollowUpButtons(window.pendingFollowUpQuestions);
-                    })
-                    .catch(error => {
-                        console.error("[TurnStart]: Error fetching follow-up questions:", error);
-                    });
+
                     hideThinkingBubble() ; // Hide thinking bubble when avatar is ready
-                    
-                    document.getElementById("query_form").style.visibility = "hidden";  
-                    //document.getElementById("follow_up_questions").style.visibility = "hidden"; 
                 break;
     
                 case "TurnEnd":
                     console.log("[Event Received]: TurnEnd - Avatar finished speaking.");
                     // Fetch follow-up questions if not already available
                     // Make visible again
-                    RemoveCaption();
+                    //RemoveCaption();
                     document.getElementById("query_form").style.visibility = "visible";
-                    if (!window.pendingFollowUpQuestions || window.pendingFollowUpQuestions.length === 0) {
-                        console.log("[TurnEnd]: Fetching follow-up questions from server.");
-                        fetch('/get_follow_ups')
-                            .then(response => response.json())
-                            .then(data => {
-                                window.pendingFollowUpQuestions = data.follow_up_questions || [];
-                                const allQuestions = (window.previousFollowUpQuestions || []).concat(window.pendingFollowUpQuestions);
-                                console.log("[TurnEnd]: Creating buttons for all questions:", allQuestions);
-                                createFollowUpButtons(allQuestions);
-                            })
-                            .catch(error => {
-                                console.error("[TurnEnd]: Error fetching follow-up questions:", error);
-                            });
-                    } else {
-                        const allQuestions = (window.previousFollowUpQuestions || []).concat(window.pendingFollowUpQuestions);
-                        console.log("[TurnEnd]: Creating buttons for all questions:", allQuestions);
-
-                        createFollowUpButtons(allQuestions);
-                    }
                     break;
                 
     
@@ -394,7 +335,7 @@ function originalSpeakFunction(responseText) {
 
     const spokenText = responseText.replace(/\n/g, ' ');
     
-    showCaption(spokenText);
+    //showCaption(spokenText);
     const spokenSsml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts' xml:lang='en-US'>
     <voice name='drdavidNeural'>
         <mstts:ttsembedding speakerProfileId=''>
@@ -443,8 +384,8 @@ function generateWelcomeButton() {
     button.onclick = () => {
         // Make invisible (space is still preserved)
         document.getElementById("query_form").style.visibility = "hidden";
-        document.getElementById("user_query").value = "Hello, who are you?"
-        submitQuery("Hello, who are you?"); // Trigger the query submission
+        document.getElementById("user_query").value = "Hi, how are you?"
+        submitQuery("Hi"); // Trigger the query submission
         showThinkingBubble();
         // Show the query form when the initial button is clicked
         queryForm.style.display = "flex";
@@ -468,8 +409,6 @@ function generateWelcomeButton() {
 }
 
 function showThinkingBubble() {
-    
-    document.getElementById('downloadBtn').style.display = 'none';   // To show
     // Find the remoteVideo container
     const remoteVideo = document.getElementById('remoteVideo');
 
@@ -527,9 +466,6 @@ function showThinkingBubble() {
 }
 
 function hideThinkingBubble() {
-
-    
-    document.getElementById('downloadBtn').style.display = 'flex';   // To show
     const thinkingOverlay = document.getElementById('thinkingOverlay');
     if (thinkingOverlay) {
         // Add the exit animation
@@ -594,42 +530,8 @@ function submitQuery(query = null) {
         return;
     }
 
-    console.log(`[submitQuery]: Sending query: ${userQuery}`);
-    fetch('/main', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_query: userQuery })
-    })
-    .then(response => response.json())
-    .then(data => {
-        console.log("[submitQuery]: Response received from server.");
-        // Reset pendingFollowUpQuestions with new data
-        window.pendingFollowUpQuestions = [];
-        
-        if (data.response) {
-            console.log("[submitQuery]: Starting avatar speech synthesis.");
-
-            //originalSpeakFunction(data.response);
             originalSpeakFunction(userQuery);
 
-
-            // Fetch updated follow-up questions
-            fetch('/get_follow_ups')
-                .then(response => response.json())
-                .then(followUpData => {
-                    window.pendingFollowUpQuestions = followUpData.follow_up_questions || [];
-                    console.log("[submitQuery]: Follow-up questions updated:", window.pendingFollowUpQuestions);
-                })
-                .catch(error => console.error("[submitQuery]: Error fetching follow-ups:", error));
-
-                // end here
-        } else {
-            console.log("[submitQuery]: No response from server.");
-        }
-    })
-    .catch(error => {
-        console.error(`[submitQuery]: Error: ${error.message}`);
-    });
 }
 
 // Function to handle follow-up questions
@@ -779,24 +681,8 @@ window.stopSession = () => {
     avatarSynthesizer.close()
 }
 
+// Automatically start the session on page load
 window.onload = () => {
-
-    // Retrieve session ID and user ID from meta tags
-    const sessionId = document.querySelector('meta[name="session_id"]').getAttribute('content');
-    const userId = document.querySelector('meta[name="user_id"]').getAttribute('content');
-
-    if (sessionId) {
-        console.log(`[DEBUG] Session ID: ${sessionId}`);
-    } else {
-        console.error("[ERROR] Session ID is missing!");
-    }
-
-    if (userId) {
-        console.log(`[DEBUG] User ID: ${userId}`);
-    } else {
-        console.error("[ERROR] User ID is missing!");
-    }
-
     startSessionAutomatically();
     console.log("Session started, ready for speech synthesis.");
 };

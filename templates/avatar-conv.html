@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Avatar Conversation</title>    
+    <!-- Include Azure Speech SDK -->
+    <script src="https://aka.ms/csspeech/jsbrowserpackageraw"></script>
+    <!-- Include the JavaScript file -->
+    <script src="{{ url_for('static', filename='js/upload.js') }}"></script>
+
+    <style>
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        #videoContainer {
+            position: relative;
+            width: 960px;
+            margin: 20px auto;
+        }
+
+        #remoteVideo {
+            width: 100%;
+            min-height: 400px;
+            background-color: #f5f5f5;
+            border-radius: 10px;
+        }
+
+        .chat-input {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        #spokenText {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        #canvas, #tmpCanvas {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="avatar-header">
+            <h2 id="avatarName"></h2>
+            <p id="avatarDescription"></p>
+        </div>
+
+        <div id="videoContainer">
+            <h2 id="videoLabel">Loading avatar...</h2>
+            <div id="overlayArea" hidden>
+                <canvas id="canvas" width="1920" height="1080"></canvas>
+                <canvas id="tmpCanvas" width="1920" height="1080"></canvas>
+            </div>
+            <div id="remoteVideo"></div>
+        </div>
+
+        <div class="chat-input">
+            <textarea id="spokenText" placeholder="Type your message..."></textarea>
+            <button id="speak" onclick="window.speak()" disabled>Send</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Get URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const avatarVersion = urlParams.get('version');
+            
+            // Set header info
+            document.getElementById('avatarName').textContent = urlParams.get('name');
+            document.getElementById('avatarDescription').textContent = urlParams.get('description');
+            
+            // Set default configuration
+            window.talkingAvatarCharacter = avatarVersion;
+            window.talkingAvatarStyle = 'business';
+            window.cogSvcRegion = 'westus2';
+            window.cogSvcSubKey = 'c897d534a33b4dd7a31e73026200226b';
+            window.useTcpForWebRTC = false;
+            
+            // Start session
+            window.startSession();
+        });
+    </script>
+</body>
+</html>

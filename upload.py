@@ -1,17 +1,3 @@
-from flask import Flask, render_template, request
-from langchain.chains import ConversationalRetrievalChain
-from langchain.prompts import PromptTemplate
-from langchain_openai import AzureChatOpenAI, AzureOpenAIEmbeddings
-from langchain_pinecone import Pinecone as PineconeVectorStore
-import os
-from pinecone import Pinecone
-import time
-import re
-from pinecone import ServerlessSpec
-
-from flask import session
-import uuid
-
 from flask import Flask, Blueprint, request, jsonify, send_from_directory, render_template
 from werkzeug.utils import secure_filename
 from datetime import datetime, timezone
@@ -24,152 +10,14 @@ from azure.identity import DefaultAzureCredential
 from azure.cosmos.aio import CosmosClient
 import uuid, time, json, requests, os
 
-from flask import Flask, render_template, url_for, request, redirect, session
+from flask import Flask, render_template, url_for
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-
-generated_buttons = []
-
-# Initialize Pinecone client
-#if not os.getenv("PINECONE_API_KEY"):
-    #os.environ["PINECONE_API_KEY"] = getpass.getpass("Enter your Pinecone API key: ")
-#pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-pc = Pinecone(api_key='9b4c63f4-a0ca-464c-b230-674ead51a686')
-# Initialize RAG-related components
-embeddings = AzureOpenAIEmbeddings(
-    deployment="AzureAdaLangchain",
-    model="text-embedding-ada-002",
-    #api_key=os.getenv("OPENAI_API_KEY"),
-    api_key="370e4756680d40a9978934a4f8af3ed9",
-    openai_api_version="2023-10-01-preview",
-    azure_endpoint="https://testopenaisaturday.openai.azure.com/",
-    openai_api_type="azure",
-    chunk_size=512
-)
-
-index_name = "langchain-test-index"
-existing_indexes = [index_info["name"] for index_info in pc.list_indexes()]
-if index_name not in existing_indexes:
-    pc.create_index(
-        name=index_name,
-        dimension=3072,
-        metric="cosine",
-        spec=ServerlessSpec(cloud="aws", region="us-east-1")
-    )
-    while not pc.describe_index(index_name).status["ready"]:
-        time.sleep(1)
-
-index = pc.Index(index_name)
-
-vectorstore = PineconeVectorStore(index=index, embedding=embeddings, text_key="text")
-retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 2})
-
-index_name_Q = "ivory-q-index"
-existing_indexes_Q = [index_info["name"] for index_info in pc.list_indexes()]
-if index_name_Q not in existing_indexes_Q:
-    pc.create_index(
-        name=index_name,
-        dimension=3072,
-        metric="cosine",
-        spec=ServerlessSpec(cloud="aws", region="us-east-1")
-    )
-    while not pc.describe_index(index_name).status["ready"]:
-        time.sleep(1)
-
-# Initialize the Pinecone Vector Store
-index_Q = pc.Index(index_name_Q)
-vectorstore_Q = PineconeVectorStore(index=index_Q, embedding=embeddings, text_key="text")
-retriever_Q = vectorstore_Q.as_retriever(search_type="similarity", search_kwargs={"k": 3})
-
-# Initialize the primary LLM for answering the user's query
-LLM_Primary = AzureChatOpenAI(
-    azure_deployment="varelabsAssistant",
-    api_key="370e4756680d40a9978934a4f8af3ed9",
-    api_version="2023-10-01-preview",
-    azure_endpoint="https://testopenaisaturday.openai.azure.com/",
-    temperature=0.5,
-    max_tokens=None,
-    timeout=None,
-    max_retries=2,
-)
-
-# Create the condense prompt for the primary LLM
-CONDENSE_PROMPT_PRIMARY = PromptTemplate.from_template("""
-You are an assistant helping to condense a follow-up question in a conversation between a parent and an Avatar (doctor) about the child's dental hygiene. Use the chat history to rephrase the parent's follow-up question into a standalone question that includes references to any people mentioned.
-
-Chat History:
-{chat_history}
-Follow-Up Input: {question}
-Standalone Question:
-""")
-
-# Create the QA prompt for the primary LLM
-QA_PROMPT_PRIMARY = PromptTemplate.from_template("""
-You are an Avatar (doctor) speaking to a parent about their child's dental hygiene. You must strictly adhere to the script provided below. Use only the information and responses from the script. When appropriate, you can use exact lines from the script, but you may also paraphrase to maintain clarity and coherence. Use the chat history to understand who you are talking to and refer to the individuals appropriately. Provide direct answers to the parent's questions and comments, and talk like a medical professional. Do not include any information not present in the script. Do not ask any follow-up questions unless the parent explicitly asks for more information.
-
-Script Details:
-{context}
-
-Conversation History:
-{chat_history}
-
-Parent's Question: {question}
-Avatar's Response:
-""")
-
-# Initialize the Conversational Retrieval Chain for the primary LLM
-qa_chain_primary = ConversationalRetrievalChain.from_llm(
-    llm=LLM_Primary,
-    retriever=retriever,
-    condense_question_prompt=CONDENSE_PROMPT_PRIMARY,
-    combine_docs_chain_kwargs={'prompt': QA_PROMPT_PRIMARY},
-    return_source_documents=True,
-    verbose=False
-)
-
-# Example usage
-chat_history = []
-
-# Session-specific storage
-chat_histories = {}
-active_sessions = {}  # Will store chat histories and follow-ups per session ID
-pending_follow_ups = {}  # Store follow-up questions per session
-
-def clean_questions(questions):
-    """
-    Removes leading numbers and other non-alphabetic characters from each question.
-    
-    Args:
-    - questions (list of str): List of questions with potential leading numbers.
-    
-    Returns:
-    - list of str: Cleaned list of questions without leading numbers or symbols.
-    """
-    cleaned_questions = [re.sub(r'^\d+[\.\)]?\s*', '', question) for question in questions]
-    return cleaned_questions
-
-
-from flask import Flask, render_template, request, jsonify, send_from_directory, redirect, url_for
-
-# Azure Speech Configuration
-SPEECH_KEY = "18f978cca70246309254196a93ce34b4"
-SERVICE_REGION = "eastus"
-VOICE_NAME = "drdavidNeural"
-
-# Path to store synthesized audio files
-STATIC_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
-os.makedirs(STATIC_FOLDER, exist_ok=True)
-
-
 
 app = Flask(__name__)
 
 
-app.secret_key = os.urandom(32) # Secret key for session management
 
-
-#################################################
-
-# upload.py content
+app.debug = True  # Enable debug mode
 
 
 
@@ -222,140 +70,6 @@ azure_embeddings = AzureOpenAIEmbeddings(
     openai_api_type="azure",
     chunk_size=512
 )
-
-
-###########################################################################################
-
-
-
-@app.route('/index')
-def index_page():
-    session['session_id'] = str(uuid.uuid4())  # Always assign a new session ID
-    return render_template('index.html', session_id=session['session_id'])
-
-
-
-
-
-@app.route('/favicon.ico')
-def favicon():
-    return send_from_directory(os.path.join(app.root_path, 'static'),
-                               'favicon.ico', mimetype='image/vnd.microsoft.icon')
-
-@app.route('/static/<path:filename>')
-def serve_audio(filename):
-    return send_from_directory(STATIC_FOLDER, filename, mimetype='audio/mpeg')
-
-def cleanup_old_sessions(max_age=3600):  # max_age in seconds (1 hour)
-    current_time = time.time()
-    for session_id in list(chat_histories.keys()):
-        if current_time - session.get(f'last_access_{session_id}', 0) > max_age:
-            del chat_histories[session_id]
-            del pending_follow_ups[session_id]  # Also clean up follow-ups
-
-# Schedule periodic cleanup (you can call this periodically using a scheduler)
-def periodic_cleanup():
-    cleanup_old_sessions()
-
-    
-@app.route('/')
-def index():
-    return render_template('avatar-page.html')
-
-@app.route('/start', methods=['GET', 'POST'])
-def start_page():
-    if request.method == 'POST':
-        user_id = request.form.get('user_id') or request.args.get('user_id', "unknown")
-        session['user_id'] = user_id
-        session['session_id'] = str(uuid.uuid4())
-        return redirect(url_for('main_page', session_id=session['session_id'], user_id=session['user_id']))
-
-    user_id = request.args.get('user_id')
-    return render_template('start.html', session_id=session.get('session_id', ''), user_id=user_id)
-
-
-@app.route('/main', methods=['GET', 'POST'])
-def main_page():
-    # Get or create session ID
-    if 'session_id' not in session:
-        session['session_id'] = str(uuid.uuid4())
-        print(f"[DEBUG] New session created: {session['session_id']}")
-    
-    session_id = session['session_id']
-    user_id = session.get('user_id', 'unknown')
-
-    # Debugging
-    print(f"Session ID: {session_id}")
-    print(f"User ID: {user_id}")
-    
-    # Initialize if not exists
-    if session_id not in chat_histories:
-        chat_histories[session_id] = []
-        pending_follow_ups[session_id] = []
-
-    if request.method == 'POST':
-        data = request.get_json()
-        user_query = data.get('user_query') if data else None
-
-        if user_query:
-            try:
-                # Process user query with session-specific chat history
-                result_primary = qa_chain_primary.apply([{
-                    "question": user_query, 
-                    "chat_history": chat_histories[session_id]
-                }])[0]
-                
-                response = result_primary['answer']
-                chat_histories[session_id].append((user_query, response))
-
-                cleaned_response = re.sub(r'^Avatar:\s*', '', response)
-
-                # Generate follow-up questions for this session
-                top_chunks = retriever_Q.get_relevant_documents(response)
-                follow_up_questions = clean_questions([chunk.page_content for chunk in top_chunks])
-                
-                # Save follow-up questions for this session
-                pending_follow_ups[session_id] = follow_up_questions
-                print(f"Follow-Up Questions Updated for session {session_id}:", follow_up_questions)
-                
-                # Update last access time for session cleanup
-                session[f'last_access_{session_id}'] = time.time()
-                
-                return jsonify({"response": cleaned_response})
-            except Exception as e:
-                print(f"Error processing query: {e}")
-                return jsonify({"error": str(e)}), 500
-
-        return jsonify({"error": "No user query provided"}), 400
-
-    # For GET requests, pass all required parameters including session_id
-    return render_template('index.html', 
-                         session_id=session_id, 
-                          user_id=user_id, # Add this line
-                         response=None, 
-                         follow_up_questions=pending_follow_ups.get(session_id, []),
-                         chat_history=chat_histories.get(session_id, []))
-
-# Remove the separate index route as it's not needed
-# The main_page route now handles everything we need
-
-@app.route('/get_follow_ups', methods=['GET'])
-def get_follow_up_questions():
-    """Serve follow-up questions for the current session."""
-    session_id = session.get('session_id')
-    if not session_id:
-        return jsonify({"follow_up_questions": []})
-    
-    return jsonify({
-        "follow_up_questions": pending_follow_ups.get(session_id, [])
-    })
-
-
-
-
-##############################################################################
-
-# Upload.py content
 
 # Add route to serve files from parent directory
 @app.route('/sdk/<path:filename>')
@@ -669,10 +383,10 @@ def initialize_avatar():
         app.logger.error(f"Avatar initialization error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-
-@app.route('/start_dental')
-def start_dental():
-    return render_template('start.html')
+@app.route('/')
+def index():
+    """Serve the home page file"""
+    return render_template('avatar-page.html')
 
 async def upsert_documents_with_embeddings(documents, embeddings_model, category_id: str, source_type: str):
     """
@@ -1003,14 +717,9 @@ async def get_avatars():
     except Exception as e:
         print(f"[ERROR] Failed to fetch avatars: {e}")
         return jsonify({'error': str(e)}), 500
-    
-
-########################################################################################################
-
 
 if __name__ == '__main__':
-
-        # Check for required environment variables
+    # Check for required environment variables
     required_vars = {
         "AZURE_OPENAI_API_KEY": AZURE_OPENAI_API_KEY,
         "PINECONE_API_KEY": PINECONE_API_KEY
@@ -1020,5 +729,7 @@ if __name__ == '__main__':
     if missing_vars:
         print(f"Error: Missing required environment variables: {', '.join(missing_vars)}")
         exit(1)
-    #app.run(debug=True, host ='0.0.0.0', port=8000)
-    app.run()
+    
+    print("Starting server...")
+    print("Access the upload form at: http://localhost:5000/")
+    app.run(debug=True, port=5000)
