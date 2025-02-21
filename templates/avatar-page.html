@@ -224,6 +224,34 @@
 .dental-btn:hover {
     background-color: #0056b3;
 }
+.footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    background-color: #f8f9fa;
+    color: #333;
+    font-size: 14px;
+    margin-top: 20px;
+    border-top: 1px solid #ddd;
+}
+
+.footer-left, .footer-right {
+    display: flex;
+    gap: 10px;
+}
+
+.footer-icon {
+    width: 34px;
+    height: 34px;
+    cursor: pointer;
+    transition: transform 0.3s ease;
+}
+
+.footer-icon:hover {
+    transform: scale(1.1);
+}
+
 
     </style>
 </head>
@@ -266,6 +294,27 @@
         </div>
     </div>
 
+
+    <footer class="footer">
+        <div class="footer-left">
+            <a href="https://github.com" target="_blank">
+                <img src="static/images/git.png" alt="GitHub" class="footer-icon">
+            </a>
+            <a href="mailto:zalake@uic.edu">
+                <img src="static/images/mail.png" alt="Email" class="footer-icon">
+            </a>
+        </div>
+        
+        <p>If you do not see your avatar/system, kindly <strong>refresh the page</strong>.</p>
+    
+        <div class="footer-right">
+            <a href="https://vare.ahs.uic.edu" target="_blank">
+                <img src="static/images/uic.png" alt="UIC" class="footer-icon">
+            </a>
+        </div>
+    </footer>
+    
+    
     <script>
 
 function startDentalConversation() {
@@ -343,8 +392,29 @@ function createAvatarBlock(avatar) {
             const avatarVersion = avatarBlock.querySelector('.avatar-version').textContent;
             const avatarDescription = avatarBlock.querySelector('.avatar-description').textContent;
 
-            const url = `/avatar-conv.html?categoryId=${encodeURIComponent(categoryId)}&version=${encodeURIComponent(avatarVersion)}&name=${encodeURIComponent(avatarName)}&description=${encodeURIComponent(avatarDescription)}`;
-            window.location.href = url;
+            // First initialize a new chat session
+            fetch('/initialize_chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    categoryId: categoryId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Then navigate to the conversation page
+                    const url = `/avatar-conv.html?categoryId=${encodeURIComponent(categoryId)}&version=${encodeURIComponent(avatarVersion)}&name=${encodeURIComponent(avatarName)}&description=${encodeURIComponent(avatarDescription)}`;
+                    window.location.href = url;
+                } else {
+                    console.error('Failed to initialize chat:', data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error initializing chat:', error);
+            });
         }
         // Load avatars when page loads
         document.addEventListener('DOMContentLoaded', fetchAvatars);

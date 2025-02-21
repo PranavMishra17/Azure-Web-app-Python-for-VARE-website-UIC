@@ -14,12 +14,15 @@
         }
         .loading {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;  /* Smaller width */
+            padding: 20px;
+            background: rgba(106, 71, 234, 0.5);
+            border-radius: 10px;
             display: none;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             z-index: 1000;
@@ -196,7 +199,7 @@
             font-size: 12px;
         }
 
-        .avatar-selection {
+.avatar-selection {
     display: flex;
     justify-content: space-between;
     flex-wrap: wrap;
@@ -231,7 +234,65 @@
     margin-bottom: 10px;
     object-fit: cover;
 }
+.background-selection {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 20px;
+    margin: 10px 0;
+    overflow-x: auto;
+    padding-bottom: 10px;
+}
 
+.background-option {
+    text-align: center;
+    flex: 1;
+    min-width: 150px;
+    cursor: pointer;
+    padding: 10px;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.background-option:hover {
+    background-color: #f0f0f0;
+}
+
+.background-option.selected {
+    border-color: #3498db;
+    background-color: #ebf5fb;
+}
+
+.background-preview {
+    width: 150px;
+    height: 100px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    border: 1px solid #ddd;
+}
+
+/* Background Preview Styles */
+.white-bg {
+    background: white;
+}
+
+.gradient-bg {
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+}
+
+.pattern-bg {
+    background: #f5f5f5;
+    background-image: radial-gradient(#000 1px, transparent 1px);
+    background-size: 20px 20px;
+}
+
+.office-bg {
+    background: linear-gradient(rgba(255,255,255,0.9), rgba(255,255,255,0.9)),
+                url('/static/images/office-background.jpg');
+    background-size: cover;
+    background-position: center;
+}
 .info-container {
     display: flex;
     align-items: center;
@@ -267,6 +328,35 @@
 .price-text {
     color: #495057;
 }
+
+.footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    background-color: #f8f9fa;
+    color: #333;
+    font-size: 14px;
+    margin-top: 20px;
+    border-top: 1px solid #ddd;
+}
+
+.footer-left, .footer-right {
+    display: flex;
+    gap: 10px;
+}
+
+.footer-icon {
+    width: 34px;
+    height: 34px;
+    cursor: pointer;
+    transition: transform 0.3s ease;
+}
+
+.footer-icon:hover {
+    transform: scale(1.1);
+}
+
 
     </style>
 </head>
@@ -340,6 +430,36 @@
                 </div>
                 <span class="error" id="avatarVersionError"></span>
             </div>
+
+            <div class="form-group">
+                <label>Select Background * 
+                    <span style="float: right; color: #666;">Default: White</span>
+                </label>
+                <div class="background-selection">
+                    <div class="background-option">
+                        <img src='/static/images/hos.jpeg'alt="Hospital" class="avatar-img">
+                        <input type="radio" name="backgroundVersion" value="white" required checked>
+                        <label>Hospital</label>
+                    </div>
+                    <div class="background-option">
+                        <img src='/static/images/space.jpg'alt="Space" class="avatar-img">
+                        <input type="radio" name="backgroundVersion" value="gradient" required>
+                        <label>Space</label>
+                    </div>
+                    <div class="background-option">
+                        <img src='/static/images/home.jpg'alt="Home" class="avatar-img">
+                        <input type="radio" name="backgroundVersion" value="pattern" required>
+                        <label>Home</label>
+                    </div>
+                    <div class="background-option">
+                        <img src='/static/images/sta.jpg'alt="Space Station" class="avatar-img">
+                        <input type="radio" name="backgroundVersion" value="office" required>
+                        <label>Space Station</label>
+                    </div>
+                </div>
+                <span class="error" id="backgroundVersionError"></span>
+            </div>
+
             <div style="display: flex; align-items: center; gap: 30px; margin-top: 20px;">
                 <button type="submit" id="submitBtn" style="width: auto;">Create Avatar</button>
                 <div class="price-container" style="margin-left: 30px; flex-grow: 1;">
@@ -353,16 +473,34 @@
     
         <!-- Existing loading overlay - modify to include text -->
         <div id="loadingOverlay" class="loading">
-            <div style="text-align: center;">
                 <div class="loading-spinner"></div>
                 <div class="loading-text">Creating your custom avatar...<br>This may take a few moments.</div>
-            </div>
+            
         </div>
         <!-- New AI loading overlay -->
         <div id="aiLoadingOverlay" class="ai-loading">
             <div class="ai-loading-spinner"></div>
             <div class="loading-text">AI is reading your knowledge base<br>and generating an optimized prompt...</div>
         </div>
+
+        <footer class="footer">
+            <div class="footer-left">
+                <a href="https://github.com" target="_blank">
+                    <img src="static/images/git.png" alt="GitHub" class="footer-icon">
+                </a>
+                <a href="mailto:zalake@uic.edu">
+                    <img src="static/images/mail.png" alt="Email" class="footer-icon">
+                </a>
+            </div>
+            
+            <p>This website provides a mockup-payment. It does not require<strong> any payment</strong>.</p>
+        
+            <div class="footer-right">
+                <a href="https://vare.ahs.uic.edu" target="_blank">
+                    <img src="static/images/uic.png" alt="UIC" class="footer-icon">
+                </a>
+            </div>
+        </footer>
 
     <script>
 
@@ -413,75 +551,131 @@ Avatar's Response:`;
             const newFiles = Array.from(e.target.files);
             addFiles(newFiles);
         }
+// Add at the beginning of your JavaScript
+let fileCosts = new Map(); // Store costs for each file
 
-        async function addFiles(newFiles) {
-            const validFiles = newFiles.filter(file => 
-                file.type === 'application/pdf' || 
-                file.type === 'text/plain' ||
-                file.name.endsWith('.pdf') || 
-                file.name.endsWith('.txt')
-            );
-
-            if (validFiles.length !== newFiles.length) {
-                document.getElementById('fileError').textContent = 'Some files were skipped. Only PDF and TXT files are allowed.';
-            }
-
-            let totalContentHostingCost = 0;
-            for (const file of validFiles) {
-                const cost = await calculateContentHostingCost(file);
-                totalContentHostingCost += cost;
-            }
-
-            // Update content hosting cost display
-            document.getElementById('contentHostingCost').textContent = 
-                `Estimated content hosting: $${totalContentHostingCost.toFixed(2)}/month`;
-
-            files = [...files, ...validFiles];
-            updateFileList();
-            updatePrices();  // Changed from updatePrice to updatePrices
-            
-            // Show generate buttons when files are uploaded
-            if (files.length > 0) {
-                document.getElementById('generateQAPrompt').classList.add('visible');
-                document.getElementById('promptDes').classList.add('visible');
-            } else {
-                document.getElementById('generateQAPrompt').classList.remove('visible');
-                document.getElementById('promptDes').classList.remove('visible');
-            }
-        }
-
-        document.getElementById('generateQAPrompt').addEventListener('click', async () => {
-            if (files.length === 0) return;
-            
-            const btn = document.getElementById('generateQAPrompt');
-            btn.disabled = true;
-            document.getElementById('aiLoadingOverlay').style.display = 'flex';  // Show AI loading
-
-            
-            try {
-                const formData = new FormData();
-                files.forEach(file => formData.append('files', file));
-                formData.append('prompt_type', 'qa');
-                
-                const response = await fetch('/generate_prompt', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (!response.ok) throw new Error('Failed to generate prompt');
-                
-                const result = await response.json();
-                document.getElementById('qaPrompt').value = result.prompt;
-            } catch (error) {
-                console.error('Error:', error);
-                alert('Failed to generate prompt');
-            } finally {
-                btn.disabled = false;
-                document.getElementById('aiLoadingOverlay').style.display = 'none';  // Hide AI loading
-            }
+async function calculateContentHostingCost(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+        const response = await fetch('/estimate_hosting_cost', {
+            method: 'POST',
+            body: formData
         });
+        
+        if (!response.ok) {
+            throw new Error('Failed to estimate cost');
+        }
+        
+        const data = await response.json();
+        return data.hosting_cost;
+    } catch (error) {
+        console.error('Error estimating cost:', error);
+        return 0; // Return 0 if there's an error instead of throwing
+    }
+}
 
-        function updateFileList() {
+async function addFiles(newFiles) {
+    const validFiles = newFiles.filter(file => 
+        file.type === 'application/pdf' || 
+        file.type === 'text/plain' ||
+        file.name.endsWith('.pdf') || 
+        file.name.endsWith('.txt')
+    );
+
+    if (validFiles.length !== newFiles.length) {
+        document.getElementById('fileError').textContent = 'Some files were skipped. Only PDF and TXT files are allowed.';
+    }
+
+    // Process each new file
+    for (const file of validFiles) {
+        const cost = await calculateContentHostingCost(file);
+        fileCosts.set(file.name, cost); // Store cost for each file
+    }
+
+    // Add new files to the files array
+    files = [...files, ...validFiles];
+    
+    // Update UI
+    updateFileList();
+    updateContentHostingCost();
+    
+    // Show/hide generate buttons
+    if (files.length > 0) {
+        document.getElementById('generateQAPrompt').classList.add('visible');
+        document.getElementById('promptDes').classList.add('visible');
+    } else {
+        document.getElementById('generateQAPrompt').classList.remove('visible');
+        document.getElementById('promptDes').classList.remove('visible');
+    }
+}
+
+function removeFile(index) {
+    const removedFile = files[index];
+    fileCosts.delete(removedFile.name); // Remove cost for this file
+    files.splice(index, 1);
+    
+    // Update UI without recalculating costs
+    updateFileList();
+    updateContentHostingCost();
+
+    // Show/hide generate buttons
+    if (files.length > 0) {
+        document.getElementById('generateQAPrompt').classList.add('visible');
+        document.getElementById('promptDes').classList.add('visible');
+    } else {
+        document.getElementById('generateQAPrompt').classList.remove('visible');
+        document.getElementById('promptDes').classList.remove('visible');
+    }
+}
+
+function updateContentHostingCost() {
+    // Calculate total from stored costs
+    const totalCost = Array.from(fileCosts.values()).reduce((sum, cost) => sum + cost, 0);
+    
+    // Update the display
+    document.getElementById('contentHostingCost').textContent = 
+        `Estimated content hosting: $${totalCost.toFixed(2)}/month`;
+    
+    // Update overall prices
+    updatePrices();
+}
+
+function updatePrices() {
+    const basePrice = 3.50;
+    const premiumAvatarPrice = 0.75;
+    
+    let avatarCost = basePrice;
+    
+    // Add premium price if premium avatar selected
+    const selectedAvatar = document.querySelector('input[name="avatarVersion"]:checked')?.value;
+    if (selectedAvatar === 'dr-david-avenetti' || selectedAvatar === 'prof-zalake') {
+        avatarCost += premiumAvatarPrice;
+    }
+    
+    // Get total content cost from stored costs
+    const contentCost = Array.from(fileCosts.values()).reduce((sum, cost) => sum + cost, 0);
+    
+    // Calculate total
+    const totalCost = avatarCost + contentCost;
+    
+    // Update displays
+    document.getElementById('avatarHostingPrice').textContent = 
+        `Estimated avatar hosting: $${avatarCost.toFixed(2)}/month`;
+    document.getElementById('totalCost').textContent = 
+        `$${totalCost.toFixed(2)}/month`;
+}
+
+// Update your event listeners to use these functions
+document.getElementById('fileUpload').addEventListener('change', handleFileSelect);
+
+function handleFileSelect(e) {
+    const newFiles = Array.from(e.target.files);
+    addFiles(newFiles);
+}
+
+function updateFileList() {
             fileList.innerHTML = files.map((file, index) => `
                 <div class="file-item">
                     <span>${file.name}</span>
@@ -491,55 +685,46 @@ Avatar's Response:`;
             
         }
 
-        function removeFile(index) {
-            const removedFile = files[index];
-            files.splice(index, 1);
-            updateFileList();
-            //updatePrice();
 
-                // Recalculate content hosting cost
-            calculateContentHostingCost(files).then(cost => {
-                document.getElementById('contentHostingCost').textContent = 
-                    `Estimated content hosting: $${cost.toFixed(2)}/month`;
-                    updatePrices();  // Add this to update all prices
-            });
-
-            // Show generate buttons when files are uploaded
-            if (files.length > 0) {
-                document.getElementById('generateQAPrompt').classList.add('visible');
-                document.getElementById('promptDes').classList.add('visible');
-            } else {
-                document.getElementById('generateQAPrompt').classList.remove('visible');
-                document.getElementById('promptDes').classList.remove('visible');
-            }
-        }
-
-        function updatePrices() {
-            const basePrice = 3.50;
-            const filePrice = 0.50;
-            const premiumAvatarPrice = 0.75;
-            
-            let avatarCost = basePrice;
-            
-            // Add premium price if premium avatar selected
-            const selectedAvatar = document.querySelector('input[name="avatarVersion"]:checked')?.value;
-            if (selectedAvatar === 'dr-david-avenetti' || selectedAvatar === 'prof-zalake') {
-                avatarCost += premiumAvatarPrice;
+document.getElementById('generateQAPrompt').addEventListener('click', async () => {
+            if (files.length === 0) {  // Use the global files array
+                alert('Please upload files first');
+                return;
             }
             
-            // Get content hosting cost
-            const contentCostText = document.getElementById('contentHostingCost').textContent;
-            const contentCost = parseFloat(contentCostText.match(/\$([0-9.]+)/)[1]) || 0;
+            const btn = document.getElementById('generateQAPrompt');
+            const loadingOverlay = document.getElementById('aiLoadingOverlay');
             
-            // Calculate total
-            const totalCost = avatarCost + contentCost;
+            btn.disabled = true;
+            loadingOverlay.style.display = 'flex';
             
-            // Update displays
-            document.getElementById('avatarHostingPrice').textContent = 
-                `Estimated avatar hosting: $${avatarCost.toFixed(2)}/month`;
-            document.getElementById('totalCost').textContent = 
-                `$${totalCost.toFixed(2)}/month`;
-        }
+            try {
+                const formData = new FormData();
+                files.forEach(file => formData.append('files', file));  // Use the global files array
+                formData.append('prompt_type', 'qa');
+                
+                const response = await fetch('/generate_prompt', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const result = await response.json();
+                    throw new Error(result.error || 'Failed to generate prompt');
+                }
+                
+                const result = await response.json();
+                document.getElementById('qaPrompt').value = result.prompt;
+            } catch (error) {
+                console.error('Error:', error);
+                alert(error.message || 'Failed to generate prompt. Please try again.');
+            } finally {
+                btn.disabled = false;
+                loadingOverlay.style.display = 'none';
+            }
+        });
+
+        
 
         // Update the existing event listeners
         document.querySelectorAll('.avatar-option').forEach(option => {
@@ -551,25 +736,7 @@ Avatar's Response:`;
             });
         });
 
-        async function calculateContentHostingCost(file) {
-            const formData = new FormData();
-            formData.append('file', file);
-            
-            try {
-                const response = await fetch('/estimate_hosting_cost', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (!response.ok) throw new Error('Failed to estimate cost');
-                
-                const data = await response.json();
-                return data.hosting_cost;
-            } catch (error) {
-                console.error('Error estimating cost:', error);
-                return 0;
-            }
-        }
+
 
 
         // Initial price update
@@ -587,6 +754,9 @@ form.addEventListener('submit', async (e) => {
     const avatarDescription = document.getElementById('avatarDescription').value.trim();
     const avatarVersion = document.querySelector('input[name="avatarVersion"]:checked')?.value;
     const qaPrompt = document.getElementById('qaPrompt').value.trim();
+    // Add this to your existing form event listener, inside the try block where you create the FormData
+    const backgroundVersion = document.querySelector('input[name="backgroundVersion"]:checked')?.value;
+
 
     if (!avatarName) {
         document.getElementById('avatarNameError').textContent = 'Avatar name is required';
@@ -598,6 +768,10 @@ form.addEventListener('submit', async (e) => {
     }
     if (!avatarVersion) {
         document.getElementById('avatarVersionError').textContent = 'Please select an avatar version';
+        isValid = false;
+    }
+    if (!backgroundVersion) {
+        document.getElementById('avatarNameError').textContent = 'Background version is required';
         isValid = false;
     }
     if (files.length === 0) {
@@ -618,6 +792,7 @@ form.addEventListener('submit', async (e) => {
         formData.append('avatarDescription', avatarDescription);
         formData.append('avatarVersion', avatarVersion);
         formData.append('qaPrompt', qaPrompt);
+        formData.append('backgroundVersion', backgroundVersion);
         files.forEach(file => formData.append('files', file));
 
         // Using the new route name
@@ -627,19 +802,17 @@ form.addEventListener('submit', async (e) => {
         });
 
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to create avatar');
+            throw new Error('Failed to create avatar');
         }
-
-        const result = await response.json();
-        if (result.redirect) {
-            window.location.href = result.redirect;
-        } else {
-            alert('Avatar created successfully!');
-        }
+        // On success, the response is HTML, so we can just set the window location
+        // This will load the new page returned by render_template
+        document.open();
+        document.write(await response.text());
+        document.close();
+        
     } catch (error) {
         console.error('Error:', error);
-        alert(error.message || 'Failed to create avatar. Please try again.');
+        alert('Failed to create avatar. Please try again.');
     } finally {
         loadingOverlay.classList.remove('active');
     }
@@ -649,6 +822,15 @@ form.addEventListener('submit', async (e) => {
 document.querySelectorAll('.avatar-option').forEach(option => {
     option.addEventListener('click', () => {
         document.querySelectorAll('.avatar-option').forEach(opt => opt.classList.remove('selected'));
+        option.classList.add('selected');
+        option.querySelector('input[type="radio"]').checked = true;
+    });
+});
+
+// Add click handler for background selection
+document.querySelectorAll('.background-option').forEach(option => {
+    option.addEventListener('click', () => {
+        document.querySelectorAll('.background-option').forEach(opt => opt.classList.remove('selected'));
         option.classList.add('selected');
         option.querySelector('input[type="radio"]').checked = true;
     });

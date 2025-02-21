@@ -167,6 +167,264 @@ app = Flask(__name__)
 app.secret_key = os.urandom(32) # Secret key for session management
 
 
+##############################################################
+# COSMOS DB CONTENT
+
+import re
+from langchain.schema import BaseRetriever, Document
+from langchain.chains import ConversationalRetrievalChain
+from langchain_openai import AzureChatOpenAI
+from langchain.prompts import PromptTemplate
+from typing import List, Callable
+import asyncio
+from pydantic import BaseModel, Field
+from pydantic.functional_validators import SkipValidation
+
+# Custom Retriever Class for Cosmos DB
+class CosmosDBRetriever(BaseRetriever, BaseModel):
+    search_function: SkipValidation[Callable] = Field(...)
+    category_id: str = Field(...)
+    
+    class Config:
+        arbitrary_types_allowed = True
+
+    def _get_relevant_documents(self, query: str) -> List[Document]:
+        # Run the coroutine in a new event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            # Run the async function and get results
+            results = loop.run_until_complete(
+                self.search_function(query, self.category_id)
+            )
+        finally:
+            loop.close()
+        
+        documents = []
+        for result in results:
+            doc = Document(
+                page_content=result['text'],
+                metadata={
+                    'source': result.get('source_type', 'unknown'),
+                    'score': result['similarity']
+                }
+            )
+            documents.append(doc)
+        return documents
+
+
+from typing import Dict, Tuple, Optional
+import asyncio
+from datetime import datetime
+from langchain.chains import ConversationalRetrievalChain
+from langchain.prompts import PromptTemplate
+
+# Global session storage
+session_data = {}
+
+class ChatSession:
+    def __init__(self, session_id: str, category_id: str):
+        self.session_id = session_id
+        self.category_id = category_id
+        self.chat_history = []
+        self.qa_chain = None
+        self.qa_prompt = None
+        self.initialized = False
+
+
+@app.route('/initialize_chat', methods=['POST'])
+def initialize_chat():
+    # Clear any existing session data for this user
+    if 'session_id' in session:
+        session_id = session['session_id']
+        if session_id in session_data:
+            del session_data[session_id]
+    
+    # Create new session ID
+    session['session_id'] = str(uuid.uuid4())
+    
+    data = request.get_json()
+    category_id = data.get('categoryId')
+    
+    if category_id:
+        try:
+            # Initialize new chat session
+            initialize_chat_session(session['session_id'], category_id)
+            return jsonify({"status": "success", "session_id": session['session_id']})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    
+    return jsonify({"error": "No category ID provided"}), 400
+
+def initialize_chat_session(session_id: str, category_id: str) -> ChatSession:
+    """Initialize a new chat session with necessary components"""
+    if session_id in session_data:
+        return session_data[session_id]
+
+    try:
+        session = ChatSession(session_id, category_id)
+        
+        # Query Pinecone for the QA prompt
+        custom_index_name = "custom-rag-vare"
+        pinecone_api_key = "9b4c63f4-a0ca-464c-b230-674ead51a686"
+        pc = Pinecone(api_key=pinecone_api_key)
+        index = pc.Index(custom_index_name)
+        
+        # Query all vectors to find matching category
+        response = index.query(
+            vector=[0] * 1536,
+            top_k=100,
+            include_metadata=True
+        )
+
+        # Find the matching record
+        matching_prompt = None
+        for match in response['matches']:
+            try:
+                metadata_text = match['metadata']['text']
+                metadata_dict = eval(metadata_text)
+                if metadata_dict.get('index_name') == category_id:
+                    matching_prompt = metadata_dict['prompts']['qa_prompt']
+                    break
+            except Exception as e:
+                print(f"Error processing match: {e}")
+                continue
+
+                    # Create default prompt if none found or if the found prompt doesn't have required variables
+        default_prompt = """Use the following context to answer the question. If you cannot answer from the context, say you don't have enough information. Answer in 2-4 sentences only. No long answers.
+
+Context:
+{context}
+
+Chat History:
+{chat_history}
+
+Question:
+{question}
+
+Answer:"""
+
+        intro_prompt = "You are a virtual avatar, designed to provide insightful information and answer queries.\n\n"
+
+        if matching_prompt:
+            # Verify the prompt has all required variables
+            if all(var in matching_prompt for var in ["{context}", "{chat_history}", "{question}"]):
+                # Append the sentence limit instruction to the prompt
+                qa_prompt_template = intro_prompt + matching_prompt + "\n\n Answer in 2-3 sentences only. No long answers."
+            else:
+                print(f"WARNING: Prompt for category {category_id} missing required variables. Using default prompt.")
+                qa_prompt_template = intro_prompt + matching_prompt + default_prompt
+        else:
+            qa_prompt_template = default_prompt
+
+        if matching_prompt:
+            # Create two separate prompts - one for condensing and one for QA
+            condense_prompt = PromptTemplate.from_template("""Given the following conversation and a follow up question, rephrase the follow up question to be a standalone question.
+
+Chat History:
+{chat_history}
+Follow Up Input: {question}
+Standalone question:""")
+
+            qa_prompt = PromptTemplate(
+                template=qa_prompt_template,
+                # Make sure all these variables are available in the template
+                input_variables=["context", "chat_history", "question"]
+            )
+        else:
+            raise ValueError(f"No matching prompts found for category_id: {category_id}")
+
+        # Initialize components
+        cosmos_retriever = CosmosDBRetriever(
+            search_function=similarity_search_by_category,
+            category_id=category_id
+        )
+
+        llm = AzureChatOpenAI(
+            azure_deployment="varelabsAssistant",
+            api_key="370e4756680d40a9978934a4f8af3ed9",
+            api_version="2023-10-01-preview",
+            azure_endpoint="https://testopenaisaturday.openai.azure.com/",
+            temperature=0.5
+        )
+
+        # Modified QA chain initialization
+        session.qa_chain = ConversationalRetrievalChain.from_llm(
+            llm=llm,
+            retriever=cosmos_retriever,
+            condense_question_prompt=condense_prompt,  # Use separate condense prompt
+            combine_docs_chain_kwargs={
+                'prompt': qa_prompt,
+                'document_variable_name': 'context'  # Explicitly set this
+            },
+            return_source_documents=True,
+            verbose=True
+        )
+
+        session.initialized = True
+        session_data[session_id] = session
+        return session
+
+    except Exception as e:
+        print(f"Error initializing chat session: {str(e)}")
+        raise
+
+def process_chat(session_id: str, category_id: str, user_query: str):
+    """Process a chat message and return response"""
+    try:
+        # Simply get the existing session
+        if session_id not in session_data:
+            raise ValueError("Chat session not initialized. Please start a new conversation.")
+            
+        session = session_data[session_id]
+
+        # Process query
+        result = session.qa_chain({
+            "question": user_query,
+            "chat_history": session.chat_history
+        })
+
+        response = result['answer']
+        session.chat_history.append((user_query, response))
+        
+        cleaned_response = re.sub(r'^Avatar:\s*', '', response)
+        return cleaned_response, session.chat_history
+
+    except Exception as e:
+        print(f"Error in chat processing: {str(e)}")
+        return f"I apologize, but I encountered an error: {str(e)}", []
+    
+
+@app.route('/main2', methods=['GET', 'POST'])
+def main_page2():
+    if 'session_id' not in session:
+        session['session_id'] = str(uuid.uuid4())
+    
+    session_id = session['session_id']
+    
+    if request.method == 'POST':
+        data = request.get_json()
+        user_query = data.get('user_query')
+        category_id = data.get('categoryId')
+
+        if user_query and category_id:
+            response, chat_history = process_chat(
+                session_id=session_id,
+                category_id=category_id,
+                user_query=user_query
+            )
+            
+            return jsonify({
+                "response": response,
+                "chat_history": chat_history
+            })
+
+    return render_template('index.html', 
+                         session_id=session_id,
+                         response=None,
+                         chat_history=[])
+
+
 #################################################
 
 # upload.py content
@@ -273,7 +531,6 @@ def start_page():
     user_id = request.args.get('user_id')
     return render_template('start.html', session_id=session.get('session_id', ''), user_id=user_id)
 
-
 @app.route('/main', methods=['GET', 'POST'])
 def main_page():
     # Get or create session ID
@@ -367,6 +624,40 @@ def serve_sdk_files(filename):
 def serve_static(filename):
     return send_from_directory(app.static_folder, filename)
 
+def process_file(file_path):
+    """Process a single file and return its contents and metadata"""
+    try:
+        if file_path.endswith('.pdf'):
+            loader = PyPDFLoader(file_path)
+        else:  # txt file
+            loader = TextLoader(file_path)
+        
+        documents = loader.load()
+        total_text = ' '.join([doc.page_content for doc in documents])
+        # Approximate token count (rough estimation: 1 token ≈ 4 characters)
+        token_count = len(total_text) / 4
+        
+        # Split into chunks
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=200,
+        )
+        chunks = text_splitter.split_documents(documents)
+        
+        return {
+            'chunks': chunks,
+            'token_count': token_count,
+            'page_count': len(documents),
+            'success': True
+        }
+    except Exception as e:
+        print(f"[ERROR] Failed to process file {file_path}: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+    
+    
 @app.route('/generate_prompt', methods=['POST'])
 def generate_prompt():
     try:
@@ -382,73 +673,69 @@ def generate_prompt():
         # Process uploaded files to extract content
         files = request.files.getlist('files')
         file_contents = []
+        temp_files = []  # Keep track of temporary files
         
-        for file in files:
-            if file and allowed_file(file.filename):
-                filename = secure_filename(file.filename)
-                file_path = os.path.join(UPLOAD_FOLDER, filename)
-                file.save(file_path)
-                
-                try:
-                    # Extract file content
-                    documents = process_file(file_path)
-                    for doc in documents:
-                        file_contents.append(doc.page_content)
-                finally:
-                    # Clean up the uploaded file
-                    os.remove(file_path)
-        
-        # Summarize content for prompt generation
-        content_summary = "\n".join(file_contents[:3])  # Use the first 3 chunks as a representative sample
-        
-        # Define prompt generation instructions
-        if prompt_type == 'condense':
+        try:
+            for file in files:
+                if file and allowed_file(file.filename):
+                    filename = secure_filename(file.filename)
+                    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    file.save(file_path)
+                    temp_files.append(file_path)
+                    
+                    # Process the file
+                    result = process_file(file_path)
+                    if not result.get('success', False):
+                        raise Exception(f"Failed to process {filename}: {result.get('error', 'Unknown error')}")
+                    
+                    if 'chunks' in result:
+                        for chunk in result['chunks']:
+                            file_contents.append(chunk.page_content)
+                    else:
+                        print(f"Warning: No chunks found in result for {filename}")
+                        continue
+            
+            if not file_contents:
+                raise Exception("No valid content extracted from files")
+            
+            # Summarize content for prompt generation
+            content_samples = [content[:1000] for content in file_contents[:3]]
+            content_summary = "\n\n---\n\n".join(content_samples)
+            
+            # Define prompt generation instructions
             messages = [
-                (
-                    "system",
-                    """You are an expert at creating prompts for conversational AI. 
-                    Using the provided content, generate a concise and effective condense prompt 
-                    for a chat assistant. This assistant is an avatar whose knowledge base 
-                    is entirely derived from the content. The condense prompt should help the assistant 
-                    retrieve the most relevant question from the conversation history to maintain 
-                    clarity and engagement. The prompt must include placeholders for {chat_history} 
-                    and {question} and emphasize retrieval without generating new content. Only respond with the prompt.
-                    """
-                ),
-                (
-                    "human",
-                    f"Content sample:\n{content_summary}\n\nGenerate a condense prompt for the assistant."
-                ),
-            ]
-        elif prompt_type == 'qa':
-            messages = [
-                (
-                    "system",
-                    """You are an expert at crafting prompts for conversational AI. 
+                {
+                    "role": "system",
+                    "content": """You are an expert at crafting prompts for conversational AI. 
                     Based on the provided content, generate a QA prompt template for a chat assistant. 
                     The assistant acts as an avatar whose knowledge base comes exclusively from the content. 
                     The QA prompt must guide the assistant to provide clear, concise, and accurate answers 
                     while staying strictly within the knowledge base. Include placeholders for {context}, 
-                    {chat_history}, and {question}. Ensure the assistant avoids fabricating information 
-                    and maintains engagement by suggesting relevant follow-up questions.
-                    """
-                ),
-                (
-                    "human",
-                    f"Content sample:\n{content_summary}\n\nGenerate a QA prompt for the assistant."
-                ),
+                    {chat_history}, and {question}."""
+                },
+                {
+                    "role": "user",
+                    "content": f"Content sample:\n{content_summary}\n\nGenerate a QA prompt for the assistant."
+                }
             ]
-        else:
-            return jsonify({'error': 'Invalid prompt type specified'}), 400
 
-        # Invoke the LLM to generate the prompt
-        ai_msg = llm.invoke(messages)
-        
-        return jsonify({'prompt': ai_msg.content})
+            # Generate the prompt using the LLM
+            response = llm.invoke(messages)
+            if not response or not hasattr(response, 'content'):
+                raise Exception("Failed to generate prompt from LLM")
+            
+            return jsonify({'prompt': response.content})
+            
+        finally:
+            # Clean up temporary files
+            for temp_file in temp_files:
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
     
     except Exception as e:
-        return jsonify({'error': f'Failed to generate prompt: {str(e)}'}), 500
-    
+        print(f"[ERROR] Generate prompt failed: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -475,33 +762,7 @@ def create_pinecone_index(index_name):
     
     return pc.Index(index_name)
 
-
-
-def process_file(file_path):
-    """Process a single file and return its contents and token count"""
-    if file_path.endswith('.pdf'):
-        loader = PyPDFLoader(file_path)
-    else:  # txt file
-        loader = TextLoader(file_path)
     
-    documents = loader.load()
-    total_text = ' '.join([doc.page_content for doc in documents])
-    # Approximate token count (rough estimation: 1 token ≈ 4 characters)
-    token_count = len(total_text) / 4
-    
-    # Split into chunks
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200,
-    )
-    chunks = text_splitter.split_documents(documents)
-    
-    return {
-        'chunks': chunks,
-        'token_count': token_count,
-        'page_count': len(documents)
-    }
-
 @app.route('/estimate_hosting_cost', methods=['POST'])
 def estimate_hosting_cost():
     if 'file' not in request.files:
