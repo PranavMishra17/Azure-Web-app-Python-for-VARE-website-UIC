@@ -7,7 +7,6 @@ var previousAnimationFrameTimestamp = 0;
 const azureSpeechRegion = "westus2";  // Region
 //const azureSpeechRegion = "eastus";  // Region
 const azureSpeechSubscriptionKey = "c897d534a33b4dd7a31e73026200226b";  // Subscription Key
-//const azureSpeechSubscriptionKey = "18f978cca70246309254196a93ce34b4";  // Subscription Key
 const ttsVoiceName = "en-US-drdavidNeural";  // TTS Voice
 const talkingAvatarCharacterName = "drdavid-professional"; // Avatar Character
 const talkingAvatarStyleName = ""; // Avatar Style (empty)
@@ -253,7 +252,6 @@ function startSessionAutomatically() {
     }
 
     // Configure for personal voice
-    //speechSynthesisConfig.speechSynthesisVoiceName = "DragonLatestNeural";
     speechSynthesisConfig.endpointId = "8485a9ef-8730-4805-96e1-43c276be1d51";
     // Don't set endpointId when using personal voice
     // speechSynthesisConfig.endpointId = customVoiceEndpointId;
