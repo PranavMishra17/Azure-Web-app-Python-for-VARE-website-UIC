@@ -4,22 +4,15 @@ var peerConnection
 var previousAnimationFrameTimestamp = 0;
 
 // Hardcoded Azure Speech parameters
-const azureSpeechRegion = "westus2";  // Region
-//const azureSpeechRegion = "eastus";  // Region
-const azureSpeechSubscriptionKey = "c897d534a33b4dd7a31e73026200226b";  // Subscription Key
-const ttsVoiceName = "en-US-drdavidNeural";  // TTS Voice
-const talkingAvatarCharacterName = "drdavid-professional"; // Avatar Character
 const talkingAvatarStyleName = ""; // Avatar Style (empty)
-const customVoiceEndpointId = "";  // Custom Voice Deployment ID (empty)
-const personalVoiceSpeakerProfileID = "6e315503-b996-485a-8bd7-9f22da3d2ecf"; // Personal Voice Speaker Profile ID (empty)
 const usePrivateEndpoint = false; // Enable Private Endpoint is false
 const privateEndpointUrl = "";    // Private Endpoint URL (not used since usePrivateEndpoint is false)
 
 // Set additional avatar configurations 
 const isCustomAvatar = true;  // Custom Avatar is true
-const transparentBackground = false;  // Transparent Background is false
+const transparentBackground = true;  // Transparent Background is false
 const videoCrop = true;  // Enable video cropping to achieve portrait mode
-const backgroundColor = "#FFFFFFFF";  // Background Color (fully opaque white)
+const backgroundColor = "#00FF00FF"; 
 
 // **Portrait Mode Crop Settings**
 // The original video is 1920x1080 (16:9).
@@ -35,6 +28,40 @@ const cropRight = cropLeft + targetPortraitWidth;
 // Add at top with other global variables
 var isAvatarSpeakingEnded = false;
 const followuptimer = 5000;
+
+// Declare variables in the global scope
+let azureSpeechRegion;
+let azureSpeechSubscriptionKey;
+let ttsVoiceName;
+let talkingAvatarCharacterName;
+let personalVoiceSpeakerProfileID;
+let customVoiceEndpointId;
+let customVendpoinIDt;
+
+async function fetchConfig() {
+    try {
+        const response = await fetch('/config');
+        const config = await response.json();
+
+        // Use the values dynamically
+        // Assign values to global variables
+        azureSpeechRegion = config.azureSpeechRegion;
+        azureSpeechSubscriptionKey = config.azureSpeechSubscriptionKey;
+        ttsVoiceName = config.ttsVoiceName;
+        talkingAvatarCharacterName = config.talkingAvatarCharacterName;
+        personalVoiceSpeakerProfileID = config.personalVoiceSpeakerProfileID;
+        customVoiceEndpointId = config.customVoiceEndpointId;
+        customVendpoinIDt = config.customVendpoinIDt;
+
+        //console.log("Config loaded:", config); // Debugging purpose
+    } catch (error) {
+        console.error("Error fetching config:", error);
+    }
+}
+
+// Call the function to load config
+fetchConfig();
+
 
 // Setup logging
 const log = msg => {
@@ -52,11 +79,11 @@ function setupWebRTC(iceServerUrl, iceServerUsername, iceServerCredential) {
         }]
     })
 
-    // Fetch WebRTC video stream and mount it to an HTML video element
     peerConnection.ontrack = function (event) {
         const remoteVideoDiv = document.getElementById('remoteVideo');
+        console.log("Track received:", event.track.kind);
         
-        // Clean up existing video element if there is any
+        // Clean up existing media elements
         for (let i = 0; i < remoteVideoDiv.childNodes.length; i++) {
             if (remoteVideoDiv.childNodes[i].localName === event.track.kind) {
                 remoteVideoDiv.removeChild(remoteVideoDiv.childNodes[i]);
@@ -64,13 +91,14 @@ function setupWebRTC(iceServerUrl, iceServerUsername, iceServerCredential) {
         }
     
         const mediaPlayer = document.createElement(event.track.kind);
-        mediaPlayer.id = event.track.kind;
+        mediaPlayer.id = event.track.kind;  // Set ID to 'video' or 'audio'
         mediaPlayer.srcObject = event.streams[0];
         mediaPlayer.autoplay = true;
-        mediaPlayer.style.objectFit = "cover"; // Ensure video fills the container without distortion
-        mediaPlayer.style.width = "100%";      // Adjust to container width
-        mediaPlayer.style.height = "100%";     // Adjust to container height
+        mediaPlayer.style.objectFit = "cover";
+        mediaPlayer.style.width = "100%";
+        mediaPlayer.style.height = "100%";
         remoteVideoDiv.appendChild(mediaPlayer);
+        console.log(`${event.track.kind} element created with ID: ${mediaPlayer.id}`);
     
         // Hide labels and show overlay
         const videoLabel = document.getElementById('videoLabel');
@@ -80,21 +108,50 @@ function setupWebRTC(iceServerUrl, iceServerUsername, iceServerCredential) {
     
         if (event.track.kind === 'video') {
             mediaPlayer.playsInline = true;
-            const canvas = document.getElementById('canvas');
+            
+            // Get canvas elements and make sure IDs are correct
+            const mainCanvas = document.getElementById('mainCanvas') || document.getElementById('canvas');
+            const tmpCanvas = document.getElementById('tmpCanvas');
+            
+            console.log("Canvas elements:", {
+                mainCanvas: mainCanvas ? "Found" : "Not found",
+                tmpCanvas: tmpCanvas ? "Found" : "Not found"
+            });
+            
             if (transparentBackground) {
-                remoteVideoDiv.style.width = '0.1px';
-                canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
-                canvas.hidden = false;
+                console.log("Transparent background enabled");
+                // Make sure we can see the videos initially for debugging
+                remoteVideoDiv.style.visibility = 'visible';
+                remoteVideoDiv.style.width = 'auto';
+                
+                if (mainCanvas) {
+                    mainCanvas.hidden = false;
+                    mainCanvas.getContext('2d').clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+                    console.log("Main canvas is now visible");
+                } else {
+                    console.error("Main canvas element not found!");
+                }
+                
+                // Add event listener for when video starts playing
+                mediaPlayer.addEventListener('play', () => {
+                    console.log("Video playback started, initializing transparency");
+                    window.requestAnimationFrame(makeBackgroundTransparent);
+                });
             } else {
-                canvas.hidden = true;
+                console.log("Using solid background");
+                if (mainCanvas) mainCanvas.hidden = true;
             }
         } else {
-            // Mute audio to allow autoplay
+            // This is for audio
+            console.log("Audio track received");
             mediaPlayer.muted = true;
+            mediaPlayer.addEventListener('canplaythrough', () => {
+                console.log("Audio can play through, unmuting");
+                mediaPlayer.muted = false;
+            });
         }
     };
     
-
     // Update the web page when the connection state changes
     peerConnection.oniceconnectionstatechange = e => {
         log("WebRTC status: " + peerConnection.iceConnectionState);
@@ -167,6 +224,7 @@ function startLoadingBar() {
     }, 100); // Adjust the speed of loading bar progression
 }
 
+
 // Function to wait until the loading bar is full before removing the overlay
 async function hideLoadingOverlay() {
     const loadingOverlay = document.getElementById("loadingOverlay");
@@ -222,64 +280,144 @@ const AVATAR_CONFIG = {
 function getUrlParameters() {
     const urlParams = new URLSearchParams(window.location.search);
     const avatarName = urlParams.get('version');
-    return {
+    
+    // Debug: Print all URL parameters
+    console.log("URL Parameters:");
+    urlParams.forEach((value, key) => {
+        console.log(`  ${key}: ${value}`);
+    });
+    
+    // Extract parameters
+    const params = {
         categoryId: urlParams.get('categoryId'),
         version: urlParams.get('name'),
         name: avatarName,
-        description: urlParams.get('description')
+        description: urlParams.get('description'),
+        background: urlParams.get('background'),
+        backgroundImage: urlParams.get('backgroundImage') // Check for both parameter names
     };
+    
+    // Debug: Print the extracted parameters
+    console.log("Extracted Parameters:", params);
+    
+    return params;
 }
 
 
-// Make video background transparent by matting (currently unused)
-function makeBackgroundTransparent(timestamp) {
-    // Throttle the frame rate to 30 FPS to reduce CPU usage
-    if (timestamp - previousAnimationFrameTimestamp > 30) {
-        const video = document.getElementById('video')
-        const tmpCanvas = document.getElementById('tmpCanvas')
-        const tmpCanvasContext = tmpCanvas.getContext('2d', { willReadFrequently: true })
-        tmpCanvasContext.drawImage(video, 0, 0, video.videoWidth, video.videoHeight)
-        if (video.videoWidth > 0) {
-            let frame = tmpCanvasContext.getImageData(0, 0, video.videoWidth, video.videoHeight)
-            for (let i = 0; i < frame.data.length / 4; i++) {
-                let r = frame.data[i * 4 + 0]
-                let g = frame.data[i * 4 + 1]
-                let b = frame.data[i * 4 + 2]
-                if (g - 150 > r + b) {
-                    // Set alpha to 0 for pixels that are close to green
-                    frame.data[i * 4 + 3] = 0
-                } else if (g + g > r + b) {
-                    // Reduce green part of the green pixels to avoid green edge issue
-                    let adjustment = (g - (r + b) / 2) / 3
-                    r += adjustment
-                    g -= adjustment * 2
-                    b += adjustment
-                    frame.data[i * 4 + 0] = r
-                    frame.data[i * 4 + 1] = g
-                    frame.data[i * 4 + 2] = b
-                    // Reduce alpha part for green pixels to make the edge smoother
-                    let a = Math.max(0, 255 - adjustment * 4)
-                    frame.data[i * 4 + 3] = a
-                }
-            }
-
-            const canvas = document.getElementById('canvas')
-            const canvasContext = canvas.getContext('2d')
-            canvasContext.putImageData(frame, 0, 0);
-        }
-
-        previousAnimationFrameTimestamp = timestamp
+  
+  // Function to set up the avatar with transparent background
+  function setupTransparentAvatar() {
+    const params = getUrlParameters();
+    
+    // Get background image from URL parameters
+    const backgroundImage = params.backgroundImage || params.background;
+    
+    // Set the website background
+    if (backgroundImage) {
+      changeBackground(backgroundImage);
     }
+    
+  }
 
-    window.requestAnimationFrame(makeBackgroundTransparent)
+
+// Make video background transparent by matting (currently unused)
+// JS: Update makeBackgroundTransparent function
+function makeBackgroundTransparent(timestamp) {
+    // Get video element
+    const video = document.getElementById('video');
+    if (!video || video.videoWidth === 0) {
+        window.requestAnimationFrame(makeBackgroundTransparent);
+        return;
+    }
+    
+    // Get canvas elements
+    const mainCanvas = document.getElementById('mainCanvas');
+    const tmpCanvas = document.getElementById('tmpCanvas');
+    
+    if (!mainCanvas || !tmpCanvas) {
+        console.error("Canvas elements not found");
+        window.requestAnimationFrame(makeBackgroundTransparent);
+        return;
+    }
+    
+    // Ensure canvas sizes match video
+    if (tmpCanvas.width !== video.videoWidth || tmpCanvas.height !== video.videoHeight) {
+        console.log("Adjusting canvas size to match video:", video.videoWidth, "x", video.videoHeight);
+        tmpCanvas.width = video.videoWidth;
+        tmpCanvas.height = video.videoHeight;
+        mainCanvas.width = video.videoWidth;
+        mainCanvas.height = video.videoHeight;
+    }
+    
+    // Draw video frame to temporary canvas
+    const tmpCtx = tmpCanvas.getContext('2d');
+    tmpCtx.drawImage(video, 0, 0);
+    
+    // Process the frame with chroma key
+    const imageData = tmpCtx.getImageData(0, 0, tmpCanvas.width, tmpCanvas.height);
+    const data = imageData.data;
+    
+    // This is more aggressive chroma key than before
+    for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        
+        // Check if pixel is green (adjust these values for better results)
+        if (g > 100 && g > 1.5 * r && g > 1.5 * b) {
+            data[i + 3] = 0; // Set alpha to 0 (transparent)
+        }
+    }
+    
+    // Draw processed frame to main canvas
+    const mainCtx = mainCanvas.getContext('2d');
+    mainCtx.putImageData(imageData, 0, 0);
+    
+    // Hide the video element now that we're showing the canvas
+    const remoteVideoDiv = document.getElementById('remoteVideo');
+    remoteVideoDiv.style.width = '0.1px';
+    
+    // Continue the animation loop
+    window.requestAnimationFrame(makeBackgroundTransparent);
+}
+
+// Modify your setBackgroundImage function to better debug
+function setBackgroundImage() {
+    const params = getUrlParameters();
+    console.log("Setting background image with parameters:", params);
+    
+    // Determine which background parameter to use (background or backgroundImage)
+    const backgroundParam = params.backgroundImage || params.background;
+    console.log("Selected background parameter:", backgroundParam);
+    
+    if (backgroundParam) {
+        // Ensure the background parameter is handled correctly
+        let backgroundUrl = backgroundParam;
+        
+        // If it doesn't end with an image extension, add .jpg
+        if (!backgroundUrl.match(/\.(jpg|jpeg|png|gif)$/i)) {
+            backgroundUrl += '.jpg';
+        }
+        
+        const fullUrl = `/static/images/${backgroundUrl}`;
+        console.log("Setting background to:", fullUrl);
+        
+        document.body.style.backgroundImage = `url('${fullUrl}')`;
+        document.body.style.backgroundSize = 'cover';
+        document.body.style.backgroundPosition = 'center';
+        document.body.style.backgroundRepeat = 'no-repeat';
+    } else {
+        // Default background if none provided
+        console.log("No background parameter found, using default");
+        document.body.style.backgroundImage = "url('/static/images/home.jpg')";
+    }
 }
 
 function startSessionAutomatically() {
 
-    // Start loading bar as avatar starts loading
     startLoadingBar();
-
     generateWelcomeButton(); 
+    setBackgroundImage();
 
     const params = getUrlParameters();
     const avatarConfigg = AVATAR_CONFIG[params.name] || {
@@ -288,6 +426,7 @@ function startSessionAutomatically() {
         customized: false
     };
     console.log("Avatar Config: ", avatarConfigg.name, avatarConfigg.style, avatarConfigg.customized);
+
 
     // Retrieve session ID from the meta tag
     // Retrieve session ID and user ID from meta tags
@@ -328,11 +467,10 @@ function startSessionAutomatically() {
 
     // Configure for personal voice
     if(avatarConfigg.name == "drdavid-professional"){
-        speechSynthesisConfig.endpointId = "8485a9ef-8730-4805-96e1-43c276be1d51";
+        speechSynthesisConfig.endpointId = customVendpoinIDt;
     } else {
         speechSynthesisConfig.speechSynthesisVoiceName = avatarConfigg.voice;
     }
-    //speechSynthesisConfig.endpointId = "8485a9ef-8730-4805-96e1-43c276be1d51";
     // Don't set endpointId when using personal voice
     // speechSynthesisConfig.endpointId = customVoiceEndpointId;
 
@@ -346,13 +484,28 @@ function startSessionAutomatically() {
             new SpeechSDK.Coordinate(cropRight, 1080)
         );
     }
+    // Set the format to mp4 and codec to h264
+    videoFormat.videoFormat = "mp4";
+    videoFormat.videoCodec = "h264";
 
-    //const avatarConfig = new SpeechSDK.AvatarConfig(talkingAvatarCharacterName, talkingAvatarStyleName, videoFormat);
     const avatarConfig = new SpeechSDK.AvatarConfig(avatarConfigg.name, avatarConfigg.style, videoFormat);
     avatarConfig.customized = avatarConfigg.customized;
     avatarConfig.backgroundColor = backgroundColor;
+    
     avatarSynthesizer = new SpeechSDK.AvatarSynthesizer(speechSynthesisConfig, avatarConfig);
 
+    // Log configuration for debugging
+    console.log("Avatar configuration:", {
+        name: avatarConfigg.name,
+        style: avatarConfigg.style,
+        customized: avatarConfigg.customized,
+        backgroundColor: backgroundColor,
+        videoFormat: videoFormat.videoFormat,
+        videoCodec: videoFormat.videoCodec,
+        transparentBackground: transparentBackground
+    });
+                
+    // WebRTC setup
     const xhr = new XMLHttpRequest();
     xhr.open("GET", `https://${azureSpeechRegion}.tts.speech.microsoft.com/cognitiveservices/avatar/relay/token/v1`);
     xhr.setRequestHeader("Ocp-Apim-Subscription-Key", azureSpeechSubscriptionKey);
@@ -424,7 +577,7 @@ function startSessionAutomatically() {
                         const allQuestions = (window.previousFollowUpQuestions || []).concat(window.pendingFollowUpQuestions);
                         console.log("[TurnEnd]: Creating buttons for all questions:", allQuestions);
 
-                        createFollowUpButtons(allQuestions);
+                        //createFollowUpButtons(allQuestions);
                     }
                     break;
                 
@@ -434,6 +587,7 @@ function startSessionAutomatically() {
         }
     };
 }
+
 
 function cleanupResponseText(responseText) {
     if (!responseText) return '';
@@ -449,6 +603,13 @@ function cleanupResponseText(responseText) {
     
     // Remove any remaining asterisks
     cleanText = cleanText.replace(/\*/g, '');
+    
+    // Remove any HTML and CSS content
+    cleanText = cleanText.replace(/<style>[\s\S]*?<\/style>/gi, '');
+    cleanText = cleanText.replace(/<span.*?>(.*?)<\/span>/gi, '');
+    
+    // Remove special citation text with "[Source]"
+    cleanText = cleanText.replace(/\[Source\]/gi, '');
     
     // Remove double spaces that might have been created
     cleanText = cleanText.replace(/\s+/g, ' ');
@@ -472,18 +633,19 @@ function originalSpeakFunction(responseText) {
         customized: false
     };
     
-    const spokenText = cleanupResponseText(responseText);
+    // Extract speakable content - now using the return value from showCaption
+    const cleanText = showCaption(responseText);
     
+    // Generate SSML for speech - using only the clean text
     const spokenSsml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts' xml:lang='en-US'>
     <voice name='${avatarConfigg.voice}'>
         <mstts:ttsembedding speakerProfileId=''>
-            <mstts:leadingsilence-exact value='0'/>${htmlEncode(spokenText)}
+            <mstts:leadingsilence-exact value='0'/>${htmlEncode(cleanText)}
         </mstts:ttsembedding>
     </voice>
     </speak>`;
     console.log("[" + (new Date()).toISOString() + "] Speak request sent.");
     
-    showCaption(spokenText);
     avatarSynthesizer.speakSsmlAsync(spokenSsml).then(
         (result) => {
             document.getElementById('query_form').disabled = false;
@@ -491,10 +653,7 @@ function originalSpeakFunction(responseText) {
             if (result.reason === SpeechSDK.ResultReason.SynthesizingAudioCompleted) {
                 console.log("[" + (new Date()).toISOString() + "] Speech synthesized. Result ID: " + result.resultId);
                 // Only show follow-up buttons after speech is completed
-                
-                //hideLoadingOverlay(); // Hide loading overlay when avatar is ready
                 isAvatarSpeakingEnded = false;
-
             } else {
                 console.log("[" + (new Date()).toISOString() + "] Speech failed. Result ID: " + result.resultId);
                 if (result.reason === SpeechSDK.ResultReason.Canceled) {
@@ -504,6 +663,7 @@ function originalSpeakFunction(responseText) {
         }
     ).catch(log);
 }
+
 
 function generateWelcomeButton() {
     const followUpContainer = document.getElementById("follow_up_questions");
@@ -721,6 +881,8 @@ function submitFollowUp(question) {
     document.getElementById('user_query').value = question;
     submitQuery();
 }
+
+
 function RemoveCaption() {
     console.log("Attempting to remove existing caption");
     const existingCaption = document.getElementById('captionOverlay');
@@ -733,6 +895,16 @@ function RemoveCaption() {
 function showCaption(text) {
     console.log("ShowCaption called with text:", text);
     
+    // Remove citation HTML and CSS, predefined AI assistant span, and trailing </span>
+    const cleanedText = text
+        .replace(/<style>.*?<\/style>/gs, '')  // Remove any inline styles
+        .replace(/<span class="citation-container">.*?<\/span>/gs, '')  // Remove citation spans
+        .replace(/<\/span>$/s, '')  // Remove trailing </span> tag
+        .trim();  // Remove any trailing whitespace
+    
+    // Get clean text for speech and duration calculation
+    const cleanText = cleanupResponseText(cleanedText);
+    
     // Calculate duration
     const CHARS_PER_SECOND = 15;
     const MIN_DURATION = 1500;
@@ -740,7 +912,7 @@ function showCaption(text) {
     
     const duration = Math.max(
         MIN_DURATION,
-        (text.length / CHARS_PER_SECOND) * 1000 + BUFFER_TIME
+        (cleanText.length / CHARS_PER_SECOND) * 1000 + BUFFER_TIME
     );
     console.log("Calculated duration:", duration, "ms");
 
@@ -748,7 +920,7 @@ function showCaption(text) {
     const remoteVideo = document.getElementById('remoteVideo');
     if (!remoteVideo) {
         console.error("RemoteVideo container not found!");
-        return;
+        return cleanText;
     }
     console.log("RemoteVideo container found");
     
@@ -776,8 +948,9 @@ function showCaption(text) {
         text-shadow: 2px 2px 2px rgba(0, 0, 0, 0.2);  /* Added text shadow */
     `;
 
-    captionOverlay.textContent = text;
-    console.log("Caption overlay created with text");
+    // Set caption text (cleaned version without citations)
+    captionOverlay.textContent = cleanedText;
+    console.log("Caption overlay created with cleaned text");
 
     // Add to video container
     remoteVideo.appendChild(captionOverlay);
@@ -791,7 +964,10 @@ function showCaption(text) {
         }
     }, duration);
 
-    console.log(`Caption setup complete. Duration: ${duration}ms for ${text.length} characters`);
+    console.log(`Caption setup complete. Duration: ${duration}ms for ${cleanText.length} characters`);
+    
+    // Return the clean text for speech synthesis
+    return cleanText;
 }
 
 // Helper function to HTML-encode text
@@ -863,8 +1039,22 @@ window.stopSession = () => {
     avatarSynthesizer.close()
 }
 
+window.updataTransparentBackground = () => {
+    if (document.getElementById('transparentBackground').checked) {
+        document.body.background = './image/background.png'
+        document.getElementById('backgroundColor').value = '#00FF00FF'
+        document.getElementById('backgroundColor').disabled = true
+    } else {
+        document.body.background = ''
+        document.getElementById('backgroundColor').value = '#FFFFFFFF'
+        document.getElementById('backgroundColor').disabled = false
+    }
+}
+
 window.onload = () => {
 
+    // Call the function to load config
+    fetchConfig(); 
     // Retrieve session ID and user ID from meta tags
     const sessionId = document.querySelector('meta[name="session_id"]').getAttribute('content');
     const userId = document.querySelector('meta[name="user_id"]').getAttribute('content');
@@ -880,8 +1070,6 @@ window.onload = () => {
     } else {
         console.error("[ERROR] User ID is missing!");
     }
-
-
 
     // Start the session with the configured parameters
     startSessionAutomatically();

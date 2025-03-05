@@ -19,7 +19,7 @@
             transform: translate(-50%, -50%);
             width: 300px;  /* Smaller width */
             padding: 20px;
-            background: rgba(106, 71, 234, 0.5);
+            background: rgba(45, 8, 106, 0.5);
             border-radius: 10px;
             display: none;
             flex-direction: column;
@@ -438,22 +438,22 @@
                 <div class="background-selection">
                     <div class="background-option">
                         <img src='/static/images/hos.jpeg'alt="Hospital" class="avatar-img">
-                        <input type="radio" name="backgroundVersion" value="white" required checked>
+                        <input type="radio" name="backgroundVersion" value="hos.jpeg" required checked>
                         <label>Hospital</label>
                     </div>
                     <div class="background-option">
                         <img src='/static/images/space.jpg'alt="Space" class="avatar-img">
-                        <input type="radio" name="backgroundVersion" value="gradient" required>
+                        <input type="radio" name="backgroundVersion" value="space.jpg" required>
                         <label>Space</label>
                     </div>
                     <div class="background-option">
                         <img src='/static/images/home.jpg'alt="Home" class="avatar-img">
-                        <input type="radio" name="backgroundVersion" value="pattern" required>
+                        <input type="radio" name="backgroundVersion" value="home.jpg" required>
                         <label>Home</label>
                     </div>
                     <div class="background-option">
                         <img src='/static/images/sta.jpg'alt="Space Station" class="avatar-img">
-                        <input type="radio" name="backgroundVersion" value="office" required>
+                        <input type="radio" name="backgroundVersion" value="sta.jpg" required>
                         <label>Space Station</label>
                     </div>
                 </div>
@@ -735,9 +735,6 @@ document.getElementById('generateQAPrompt').addEventListener('click', async () =
                 updatePrices();  // Changed from updatePrice to updatePrices
             });
         });
-
-
-
 
         // Initial price update
         updatePrices();

@@ -4,20 +4,13 @@ var peerConnection
 var previousAnimationFrameTimestamp = 0;
 
 // Hardcoded Azure Speech parameters
-const azureSpeechRegion = "westus2";  // Region
-//const azureSpeechRegion = "eastus";  // Region
-const azureSpeechSubscriptionKey = "c897d534a33b4dd7a31e73026200226b";  // Subscription Key
-const ttsVoiceName = "en-US-drdavidNeural";  // TTS Voice
-const talkingAvatarCharacterName = "drdavid-professional"; // Avatar Character
 const talkingAvatarStyleName = ""; // Avatar Style (empty)
-const customVoiceEndpointId = "";  // Custom Voice Deployment ID (empty)
-const personalVoiceSpeakerProfileID = "6e315503-b996-485a-8bd7-9f22da3d2ecf"; // Personal Voice Speaker Profile ID (empty)
 const usePrivateEndpoint = false; // Enable Private Endpoint is false
 const privateEndpointUrl = "";    // Private Endpoint URL (not used since usePrivateEndpoint is false)
 
 // Set additional avatar configurations 
 const isCustomAvatar = true;  // Custom Avatar is true
-const transparentBackground = false;  // Transparent Background is false
+const transparentBackground = true;  // Transparent Background is false
 const videoCrop = true;  // Enable video cropping to achieve portrait mode
 const backgroundColor = "#FFFFFFFF";  // Background Color (fully opaque white)
 
@@ -35,6 +28,40 @@ const cropRight = cropLeft + targetPortraitWidth;
 // Add at top with other global variables
 var isAvatarSpeakingEnded = false;
 const followuptimer = 5000;
+
+// Declare variables in the global scope
+let azureSpeechRegion;
+let azureSpeechSubscriptionKey;
+let ttsVoiceName;
+let talkingAvatarCharacterName;
+let personalVoiceSpeakerProfileID;
+let customVoiceEndpointId;
+let customVendpoinIDt;
+
+async function fetchConfig() {
+    try {
+        const response = await fetch('/config');
+        const config = await response.json();
+
+        // Use the values dynamically
+        // Assign values to global variables
+        azureSpeechRegion = config.azureSpeechRegion;
+        azureSpeechSubscriptionKey = config.azureSpeechSubscriptionKey;
+        ttsVoiceName = config.ttsVoiceName;
+        talkingAvatarCharacterName = config.talkingAvatarCharacterName;
+        personalVoiceSpeakerProfileID = config.personalVoiceSpeakerProfileID;
+        customVoiceEndpointId = config.customVoiceEndpointId;
+        customVendpoinIDt = config.customVendpoinIDt;
+
+        //console.log("Config loaded:", config); // Debugging purpose
+    } catch (error) {
+        console.error("Error fetching config:", error);
+    }
+}
+
+// Call the function to load config
+fetchConfig();
+
 
 // Setup logging
 const log = msg => {
@@ -252,7 +279,7 @@ function startSessionAutomatically() {
     }
 
     // Configure for personal voice
-    speechSynthesisConfig.endpointId = "8485a9ef-8730-4805-96e1-43c276be1d51";
+    speechSynthesisConfig.endpointId = customVendpoinIDt;
     // Don't set endpointId when using personal voice
     // speechSynthesisConfig.endpointId = customVoiceEndpointId;
 
@@ -681,6 +708,9 @@ window.stopSession = () => {
 
 // Automatically start the session on page load
 window.onload = () => {
+    // Call the function to load config
+    fetchConfig();
+
     startSessionAutomatically();
     console.log("Session started, ready for speech synthesis.");
 };

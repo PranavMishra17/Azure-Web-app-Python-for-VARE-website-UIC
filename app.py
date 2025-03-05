@@ -27,21 +27,26 @@ import uuid, time, json, requests, os
 from flask import Flask, render_template, url_for, request, redirect, session
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
+import os
+from flask import Flask, jsonify
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
 generated_buttons = []
 
 # Initialize Pinecone client
-#if not os.getenv("PINECONE_API_KEY"):
-    #os.environ["PINECONE_API_KEY"] = getpass.getpass("Enter your Pinecone API key: ")
-#pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-pc = Pinecone(api_key='9b4c63f4-a0ca-464c-b230-674ead51a686')
+
+pc = Pinecone(api_key=os.environ.get('PINECONE_API_KEY'))
 # Initialize RAG-related components
 embeddings = AzureOpenAIEmbeddings(
-    deployment="AzureAdaLangchain",
-    model="text-embedding-ada-002",
+    deployment="VARELab-TxtEmbeddingLarge",
+    model="text-embedding-3-large",
     #api_key=os.getenv("OPENAI_API_KEY"),
-    api_key="370e4756680d40a9978934a4f8af3ed9",
-    openai_api_version="2023-10-01-preview",
-    azure_endpoint="https://testopenaisaturday.openai.azure.com/",
+    api_key=os.environ.get('AZURE_OPENAI_VARE_KEY'),
+    openai_api_version="2023-05-15",
+    azure_endpoint=os.environ.get('AZURE_ENDPOINT'),
     openai_api_type="azure",
     chunk_size=512
 )
@@ -82,10 +87,10 @@ retriever_Q = vectorstore_Q.as_retriever(search_type="similarity", search_kwargs
 
 # Initialize the primary LLM for answering the user's query
 LLM_Primary = AzureChatOpenAI(
-    azure_deployment="varelabsAssistant",
-    api_key="370e4756680d40a9978934a4f8af3ed9",
-    api_version="2023-10-01-preview",
-    azure_endpoint="https://testopenaisaturday.openai.azure.com/",
+    azure_deployment="VARELab-GPT4o",
+    api_key=os.environ.get('AZURE_OPENAI_VARE_KEY'),
+    api_version="2024-08-01-preview",
+    azure_endpoint=os.environ.get('AZURE_ENDPOINT'),
     temperature=0.5,
     max_tokens=None,
     timeout=None,
@@ -151,7 +156,7 @@ def clean_questions(questions):
 from flask import Flask, render_template, request, jsonify, send_from_directory, redirect, url_for
 
 # Azure Speech Configuration
-SPEECH_KEY = "18f978cca70246309254196a93ce34b4"
+SPEECH_KEY = os.environ.get('AZURE_SPEECH_KEY')
 SERVICE_REGION = "eastus"
 VOICE_NAME = "drdavidNeural"
 
@@ -159,10 +164,7 @@ VOICE_NAME = "drdavidNeural"
 STATIC_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
 os.makedirs(STATIC_FOLDER, exist_ok=True)
 
-
-
 app = Flask(__name__)
-
 
 app.secret_key = os.urandom(32) # Secret key for session management
 
@@ -202,14 +204,37 @@ class CosmosDBRetriever(BaseRetriever, BaseModel):
         
         documents = []
         for result in results:
-            doc = Document(
-                page_content=result['text'],
-                metadata={
-                    'source': result.get('source_type', 'unknown'),
-                    'score': result['similarity']
-                }
-            )
+            # Get the metadata directly from the document
+            metadata = result.get('metadata', {})
+            
+            # Ensure we have the core metadata fields from Cosmos DB
+            if metadata:
+                # Add any additional metadata from the result
+                metadata['source_type'] = result.get('source_type', 'unknown')
+                metadata['score'] = result.get('similarity', 0)
+                metadata['category_id'] = result.get('category_id', self.category_id)
+                
+                # Print the metadata for debugging
+                print(f"[DEBUG] Document metadata before passing to Document: {metadata}")
+                
+                # Create document with metadata
+                doc = Document(
+                    page_content=result['text'],
+                    metadata=metadata
+                )
+            else:
+                # Create a basic document with minimal metadata if none exists
+                doc = Document(
+                    page_content=result['text'],
+                    metadata={
+                        'source': result.get('source_type', 'unknown'),
+                        'score': result.get('similarity', 0),
+                        'category_id': result.get('category_id', self.category_id)
+                    }
+                )
+            
             documents.append(doc)
+        
         return documents
 
 
@@ -231,7 +256,6 @@ class ChatSession:
         self.qa_prompt = None
         self.initialized = False
 
-
 @app.route('/initialize_chat', methods=['POST'])
 def initialize_chat():
     # Clear any existing session data for this user
@@ -252,6 +276,9 @@ def initialize_chat():
             initialize_chat_session(session['session_id'], category_id)
             return jsonify({"status": "success", "session_id": session['session_id']})
         except Exception as e:
+            import traceback
+            error_traceback = traceback.format_exc()
+            print(f"[DETAILED ERROR] {error_traceback}")
             return jsonify({"error": str(e)}), 500
     
     return jsonify({"error": "No category ID provided"}), 400
@@ -266,13 +293,21 @@ def initialize_chat_session(session_id: str, category_id: str) -> ChatSession:
         
         # Query Pinecone for the QA prompt
         custom_index_name = "custom-rag-vare"
-        pinecone_api_key = "9b4c63f4-a0ca-464c-b230-674ead51a686"
+        pinecone_api_key = os.environ.get('PINECONE_API_KEY')
         pc = Pinecone(api_key=pinecone_api_key)
-        index = pc.Index(custom_index_name)
         
-        # Query all vectors to find matching category
+        # Get the index dimension first
+        index_info = pc.describe_index(custom_index_name)
+        index_dimension = index_info.dimension
+        print(f"[DEBUG] Index dimension is {index_dimension}")
+        
+        # Create the appropriate zero vector
+        zero_vector = [0] * index_dimension
+        
+        # Query all vectors with the correct dimension
+        index = pc.Index(custom_index_name)
         response = index.query(
-            vector=[0] * 1536,
+            vector=zero_vector,
             top_k=100,
             include_metadata=True
         )
@@ -290,7 +325,7 @@ def initialize_chat_session(session_id: str, category_id: str) -> ChatSession:
                 print(f"Error processing match: {e}")
                 continue
 
-                    # Create default prompt if none found or if the found prompt doesn't have required variables
+        # Create default prompt if none found or if the found prompt doesn't have required variables
         default_prompt = """Use the following context to answer the question. If you cannot answer from the context, say you don't have enough information. Answer in 2-4 sentences only. No long answers.
 
 Context:
@@ -304,7 +339,7 @@ Question:
 
 Answer:"""
 
-        intro_prompt = "You are a virtual avatar, designed to provide insightful information and answer queries.\n\n"
+        intro_prompt = "You are a virtual avatar, designed to help provide insightful information and answer queries formally and in an inviting nature.\n\n"
 
         if matching_prompt:
             # Verify the prompt has all required variables
@@ -341,10 +376,10 @@ Standalone question:""")
         )
 
         llm = AzureChatOpenAI(
-            azure_deployment="varelabsAssistant",
-            api_key="370e4756680d40a9978934a4f8af3ed9",
-            api_version="2023-10-01-preview",
-            azure_endpoint="https://testopenaisaturday.openai.azure.com/",
+            azure_deployment="VARELab-GPT4o",
+            api_key=os.environ.get('AZURE_OPENAI_VARE_KEY'),
+            api_version="2024-08-01-preview",
+            azure_endpoint=os.environ.get('AZURE_ENDPOINT'),
             temperature=0.5
         )
 
@@ -376,25 +411,131 @@ def process_chat(session_id: str, category_id: str, user_query: str):
         if session_id not in session_data:
             raise ValueError("Chat session not initialized. Please start a new conversation.")
             
-        session = session_data[session_id]
+        chat_session = session_data[session_id]
 
         # Process query
-        result = session.qa_chain({
+        result = chat_session.qa_chain({
             "question": user_query,
-            "chat_history": session.chat_history
+            "chat_history": chat_session.chat_history
         })
 
         response = result['answer']
-        session.chat_history.append((user_query, response))
+        source_documents = result.get("source_documents", [])
+
+        # Debug output
+        print(f"[DEBUG] Retrieved {len(source_documents)} source documents")
+
+        # Dictionary to consolidate sources by document
+        document_pages = {}
+
+        # Process source documents to extract metadata
+        for i, doc in enumerate(source_documents):
+            print(f"\n[DEBUG] Processing document {i+1}:")
+            
+            if hasattr(doc, 'metadata'):
+                metadata = doc.metadata
+                
+                # Extract filename
+                filename = None
+                if 'source_filename' in metadata:
+                    filename = metadata['source_filename']
+                elif 'source' in metadata and metadata['source'] != 'unknown':
+                    if isinstance(metadata['source'], str) and ('/' in metadata['source'] or '\\' in metadata['source']):
+                        filename = os.path.basename(metadata['source'])
+                    else:
+                        filename = metadata['source']
+                
+                # Skip if no valid filename
+                if not filename or filename == "Unknown Source":
+                    continue
+                
+                # Extract page number
+                page_num = None
+                if 'page_number' in metadata:
+                    page_num = metadata['page_number']
+                elif 'page' in metadata:
+                    page_num = int(metadata['page']) + 1
+                
+                # Add to document_pages dictionary
+                if filename not in document_pages:
+                    document_pages[filename] = set()
+                
+                if page_num:
+                    document_pages[filename].add(page_num)
         
+        # Construct HTML citation with hover effect
+        if document_pages:
+            citation_html = '<span class="citation-container">[Source]<span class="citation-hover">'
+            
+            # Add each document with its pages
+            for filename, pages in document_pages.items():
+                if pages:
+                    # Sort page numbers
+                    sorted_pages = sorted(pages)
+                    page_str = "Page" if len(sorted_pages) == 1 else "Pages"
+                    pages_formatted = ", ".join(str(p) for p in sorted_pages)
+                    citation_html += f"{filename} - {page_str} {pages_formatted}<br>"
+                else:
+                    citation_html += f"{filename}<br>"
+            
+            citation_html += '</span></span>'
+            
+            # Add CSS for hover effect inline (will be included in the response)
+            css_style = """
+<style>
+.citation-container {
+    position: relative;
+    color: blue;
+    text-decoration: underline;
+    cursor: pointer;
+    display: inline-block;
+}
+.citation-hover {
+    visibility: hidden;
+    position: absolute;
+    z-index: 1000;
+    bottom: 125%;
+    left: 0;
+    background-color: #333;
+    color: #fff;
+    text-align: left;
+    border-radius: 6px;
+    padding: 10px;
+    opacity: 0;
+    transition: opacity 0.3s, visibility 0.3s;
+    
+    /* Ensure full content display */
+    white-space: normal;
+    width: max-content;
+    max-width: 300px;
+    word-wrap: break-word;
+    font-weight: normal;
+    font-size: 14px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+.citation-container:hover .citation-hover {
+    visibility: visible;
+    opacity: 1;
+}
+</style>
+            """
+            
+            # Add the citation to the response
+            response += " " + css_style + citation_html
+        
+        # Update chat history with the formatted response
+        chat_session.chat_history.append((user_query, response))
+
+        # Return response and updated chat history
         cleaned_response = re.sub(r'^Avatar:\s*', '', response)
-        return cleaned_response, session.chat_history
+        return cleaned_response, chat_session.chat_history
 
     except Exception as e:
         print(f"Error in chat processing: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return f"I apologize, but I encountered an error: {str(e)}", []
     
-
 @app.route('/main2', methods=['GET', 'POST'])
 def main_page2():
     if 'session_id' not in session:
@@ -442,16 +583,16 @@ MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Azure OpenAI Configuration
-AZURE_OPENAI_API_KEY = "370e4756680d40a9978934a4f8af3ed9"
-AZURE_API_BASE = "https://testopenaisaturday.openai.azure.com/"
+AZURE_OPENAI_API_KEY = os.environ.get('AZURE_OPENAI_VARE_KEY')
+AZURE_API_BASE = os.environ.get('AZURE_ENDPOINT')
 AZURE_API_VERSION = "2023-10-01-preview"
 
 # Pinecone Configuration
-PINECONE_API_KEY = "pcsk_25DwYj_auXVzzL4Erdbn7SxrNiuvAbSvEmvaD2pYGvZwR9W58G7rQbCQzrfPYk5RjFmYM"
+PINECONE_API_KEY = os.environ.get('PINECONE_API_KEY2')
 
 
-HOST = "https://varelab-website.documents.azure.com:443/"
-KEY = "hTzGghBPVfYAqSYrMMrQEnkYB2HSZr0ySo1E8BXl6nchZUgpmPTfBsJ9MJVxvVdeP0aOgojvqQMuACDbrWwhpw=="
+HOST = os.environ.get('COSMOS_HOST')
+KEY = os.environ.get('COSMOS_KEY')
 
 cosmos_client = CosmosClient(HOST, KEY)
 
@@ -459,10 +600,10 @@ database_name = "varelab-website"
 container_name = "ivory-draft"
 
 llm = AzureChatOpenAI(
-    azure_deployment="varelabsAssistant",
-    api_key="370e4756680d40a9978934a4f8af3ed9",
-    api_version="2023-10-01-preview",
-    azure_endpoint="https://testopenaisaturday.openai.azure.com/",
+    azure_deployment="VARELab-GPT4o",
+    api_key=os.environ.get('AZURE_OPENAI_VARE_KEY'),
+    azure_endpoint=os.environ.get('AZURE_ENDPOINT'),
+    api_version="2024-08-01-preview",
     temperature=0.5,
     max_tokens=None,
     timeout=None,
@@ -470,17 +611,18 @@ llm = AzureChatOpenAI(
 )
 
 
+
 # Your existing Azure OpenAI embeddings setup
 azure_embeddings = AzureOpenAIEmbeddings(
-    deployment="AzureAdaLangchain",
-    model="text-embedding-ada-002",
-    api_key="370e4756680d40a9978934a4f8af3ed9",
-    openai_api_version="2023-10-01-preview",
-    azure_endpoint="https://testopenaisaturday.openai.azure.com/",
+    deployment="VARELab-TxtEmbeddingLarge",
+    model="text-embedding-3-large",
+    api_key=os.environ.get('AZURE_OPENAI_VARE_KEY'),
+    azure_endpoint=os.environ.get('AZURE_ENDPOINT'),
+    openai_api_version="2023-05-15",
     openai_api_type="azure",
     chunk_size=512
 )
-
+        
 
 ###########################################################################################
 
@@ -742,8 +884,7 @@ def allowed_file(filename):
 
 def create_pinecone_index(index_name):
     #pc = Pinecone(api_key=PINECONE_API_KEY)
-    pinecone_api_key = "pcsk_25DwYj_auXVzzL4Erdbn7SxrNiuvAbSvEmvaD2pYGvZwR9W58G7rQbCQzrfPYk5RjFmYM"
-
+    pinecone_api_key = os.environ.get('PINECONE_API_KEY2')
     pc = Pinecone(api_key=pinecone_api_key)
     
     existing_indexes = [index_info["name"] for index_info in pc.list_indexes()]
@@ -751,7 +892,7 @@ def create_pinecone_index(index_name):
     if index_name not in existing_indexes:
         pc.create_index(
             name=index_name,
-            dimension=1536,
+            dimension=3072,
             metric="cosine",
             spec=ServerlessSpec(cloud="aws", region="us-east-1")
         )
@@ -824,7 +965,7 @@ def generate_avatar_response():
                 "videoFormat": "mp4",
                 "videoCodec": "h264",
                 "subtitleType": "soft_embedded",
-                "backgroundColor": "#FFFFFFFF",
+                "backgroundColor": "#FFFFFF1A",
             }
         }
         
@@ -847,8 +988,8 @@ def initialize_avatar():
         initial_text = data.get('text', "Hello! I'm your avatar assistant. How can I help you today?")
         
         # Configuration for Azure Speech Service
-        SPEECH_ENDPOINT = "https://westus2.api.cognitive.microsoft.com"
-        SUBSCRIPTION_KEY = "c897d534a33b4dd7a31e73026200226b"
+        SPEECH_ENDPOINT = os.environ.get('SPEECH_ENDPOINT')
+        SUBSCRIPTION_KEY = os.environ.get('SPEECH_ENDPOINT')
         API_VERSION = "2024-04-15-preview"
         
         # Get voice based on avatar version
@@ -890,7 +1031,7 @@ def initialize_avatar():
                 "videoFormat": "mp4",
                 "videoCodec": "h264",
                 "subtitleType": "soft_embedded",
-                "backgroundColor": "#FFFFFFFF",
+                "backgroundColor": "#00FFFF1A",
             }
         }
         
@@ -956,7 +1097,6 @@ async def upsert_documents_with_embeddings(documents, embeddings_model, category
                     "category_id": category_id,
                     "source_type": source_type,
                     "created_at": datetime.now(timezone.utc).isoformat()
-
                 }
                 
                 await container.upsert_item(cosmos_doc)
@@ -965,6 +1105,8 @@ async def upsert_documents_with_embeddings(documents, embeddings_model, category
             print(f"Error upserting documents: {str(e)}")
             raise
 
+
+# Update the similarity search function to include metadata
 async def similarity_search_by_category(query: str, category_id: str, k: int = 5):
     """
     Search for similar documents within a specific category using vector search
@@ -977,9 +1119,9 @@ async def similarity_search_by_category(query: str, category_id: str, k: int = 5
             # Convert vector to string format for query
             embeddings_string = ','.join(map(str, vector))
             
-            # Construct query with proper VectorDistance syntax
+            # Use specific fields instead of c.* which is not supported
             query_text = f"""
-            SELECT TOP @k c.id, c.text, c.category_id, c.source_type,
+            SELECT TOP @k c.id, c.text, c.category_id, c.source_type, c.metadata,
             VectorDistance(c.embedding, [{embeddings_string}], false, {{'dataType': 'float32', 'distanceFunction': 'cosine'}}) AS similarity
             FROM c
             WHERE c.category_id = @category_id
@@ -999,17 +1141,19 @@ async def similarity_search_by_category(query: str, category_id: str, k: int = 5
                 query=query_text,
                 parameters=parameters
             ):
+                print(f"[DEBUG] Raw Cosmos DB result metadata: {json.dumps(item.get('metadata', {}), indent=2)}")
                 results.append(item)
             
+            print(f"[DEBUG] Found {len(results)} matching documents")
             return results
                 
         except Exception as e:
             print(f"Error in similarity search: {str(e)}")
-            raise  # This will help us see the full error stack
+            raise
 
 async def upload_documents_to_category(docs: list, category_id: str, source_type: str = None):
     """
-    Upload documents to a specific category in Cosmos DB
+    Upload documents to a specific category in Cosmos DB with enhanced metadata
     
     Args:
         docs: List of Document objects to upload
@@ -1021,6 +1165,17 @@ async def upload_documents_to_category(docs: list, category_id: str, source_type
         
     try:
         print(f"\nUploading documents to category: {category_id}...")
+        
+        # Ensure all documents have consistent metadata fields
+        for doc in docs:
+            # Make sure source_filename is present
+            if 'source_filename' not in doc.metadata:
+                doc.metadata['source_filename'] = "unknown_source"
+                
+            # Make sure page_number is present for PDFs
+            if doc.metadata.get('file_type') == 'pdf' and 'page_number' not in doc.metadata:
+                doc.metadata['page_number'] = 1
+        
         await upsert_documents_with_embeddings(
             docs,
             azure_embeddings,
@@ -1028,41 +1183,49 @@ async def upload_documents_to_category(docs: list, category_id: str, source_type
             source_type=source_type
         )
         print(f"Successfully uploaded {len(docs)} documents to category: {category_id}")
+        print(f"Document metadata includes: source_filename and page_number (for PDFs)")
     except Exception as e:
         print(f"Error uploading documents to category {category_id}: {str(e)}")
         raise
 
-# Example usage with PDF reading:
-"""
-# First read your PDF and convert to Documents
-from langchain_community.document_loaders import PyPDFLoader
-
-# Load and split the PDF
-loader = PyPDFLoader("your_pdf_path.pdf")
-pdf_docs = loader.load_and_split()
-
-# Upload to Cosmos DB
-await upload_documents_to_category(
-    docs=pdf_docs,
-    category_id="ivory_script",
-    source_type="pdf_content"
-)
-"""
 
 async def upload_metadata_to_pinecone(metadata_json: dict, embeddings):
     """Upload metadata about the RAG agent to Pinecone"""
     try:
         custom_index_name = "custom-rag-vare"
-        pinecone_api_key = "9b4c63f4-a0ca-464c-b230-674ead51a686"
+        pinecone_api_key = os.environ.get('PINECONE_API_KEY')
         pc = Pinecone(api_key=pinecone_api_key)
         
         # Check if index exists
         existing_indexes = [index_info["name"] for index_info in pc.list_indexes()]
+        
+        try:
+            # Get current index dimension if it exists
+            index_info = pc.describe_index(custom_index_name)
+            index_dimension = index_info.dimension
+            print(f"[DEBUG] Existing index dimension: {index_dimension}")
+        except:
+            # Index doesn't exist
+            index_dimension = 1536  # Default
+            
+        # Get embedding dimension from a test embedding
+        metadata_text = str(metadata_json)
+        test_embedding = embeddings.embed_documents([metadata_text])[0]
+        embedding_dimension = len(test_embedding)
+        print(f"[DEBUG] Embedding dimension: {embedding_dimension}")
+        
+        # Check if dimensions match, recreate if they don't
+        if custom_index_name in existing_indexes and index_dimension != embedding_dimension:
+            print(f"[DEBUG] Dimension mismatch. Deleting and recreating index with dimension {embedding_dimension}.")
+            pc.delete_index(custom_index_name)
+            time.sleep(5)  # Wait for deletion
+            existing_indexes = [index_info["name"] for index_info in pc.list_indexes()]
+        
         if custom_index_name not in existing_indexes:
-            print(f"[DEBUG] Creating missing index: {custom_index_name}")
+            print(f"[DEBUG] Creating missing index: {custom_index_name} with dimension {embedding_dimension}")
             pc.create_index(
                 name=custom_index_name,
-                dimension=1536,
+                dimension=embedding_dimension,
                 metric="cosine",
                 spec=ServerlessSpec(cloud="aws", region="us-east-1")
             )
@@ -1070,8 +1233,7 @@ async def upload_metadata_to_pinecone(metadata_json: dict, embeddings):
                 time.sleep(1)
                 
         custom_index = pc.Index(custom_index_name)
-        metadata_text = str(metadata_json)
-        metadata_vector = embeddings.embed_documents([metadata_text])[0]
+        metadata_vector = test_embedding  # Reuse test embedding
         
         # Use index_name as unique identifier
         metadata_id = f"metadata-{metadata_json['index_name']}"
@@ -1091,7 +1253,7 @@ async def upload_metadata_to_pinecone(metadata_json: dict, embeddings):
         return False, str(e)
 
 async def upload_knowledge_to_cosmos(files: list, category_id: str, embeddings):
-    """Upload knowledge base documents to Cosmos DB"""
+    """Upload knowledge base documents to Cosmos DB with enhanced metadata"""
     try:
         all_documents = []
         
@@ -1106,10 +1268,30 @@ async def upload_knowledge_to_cosmos(files: list, category_id: str, embeddings):
                 # Process the saved file
                 if filename.endswith('.pdf'):
                     loader = PyPDFLoader(file_path)
+                    pages = loader.load_and_split()
+                    
+                    # Enhance PDF metadata with filename and page numbers
+                    for page in pages:
+                        # PyPDFLoader sets page metadata with zero-indexing, add 1 for human-readable
+                        page_num = page.metadata.get('page', 0) + 1
+                        # Add enhanced metadata
+                        page.metadata.update({
+                            'source_filename': filename,
+                            'page_number': page_num,
+                            'file_type': 'pdf'
+                        })
                 else:
                     loader = TextLoader(file_path)
+                    docs = loader.load_and_split()
                     
-                pages = loader.load_and_split()
+                    # Add metadata for text files (no page numbers)
+                    for doc in docs:
+                        doc.metadata.update({
+                            'source_filename': filename,
+                            'file_type': 'text'
+                        })
+                    pages = docs
+                
                 all_documents.extend(pages)
                 
                 # Clean up the temporary file
@@ -1122,7 +1304,7 @@ async def upload_knowledge_to_cosmos(files: list, category_id: str, embeddings):
                     os.remove(file_path)
                 return False, f"Failed to process file {file.filename}: {str(e)}"
         
-        # Upload documents to Cosmos DB using our existing function
+        # Upload documents to Cosmos DB using our existing function with enhanced metadata
         await upload_documents_to_category(
             docs=all_documents,
             category_id=category_id,
@@ -1138,8 +1320,15 @@ async def upload_knowledge_to_cosmos(files: list, category_id: str, embeddings):
 @app.route('/upload_to_rag', methods=['POST'])
 async def upload_to_rag():
     try:
-        # Get form data and files
+
+        # Your existing code
+        print("Starting upload process")
+        
+        # Add logging throughout the function
         files = request.files.getlist('files')
+        print(f"Received {len(files)} files")
+        # Get form data and files
+
         avatar_name = request.form.get('avatarName')
         qa_prompt = request.form.get('qaPrompt')
         
@@ -1154,10 +1343,10 @@ async def upload_to_rag():
         
         # Initialize embeddings
         embeddings = AzureOpenAIEmbeddings(
-            deployment="AzureAdaLangchain",
-            model="text-embedding-ada-002",
+            deployment="VARELab-TxtEmbeddingLarge",
+            model="text-embedding-3-large",
             api_key=AZURE_OPENAI_API_KEY,
-            openai_api_version="2023-10-01-preview",
+            openai_api_version="2023-05-15",
             azure_endpoint=AZURE_API_BASE,
             openai_api_type="azure",
             chunk_size=512
@@ -1171,6 +1360,7 @@ async def upload_to_rag():
             "index_name": category_id,
             "files": [f.filename for f in files],
             "created_at": datetime.now(timezone.utc).isoformat(),
+            "background": request.form.get('backgroundVersion'),
             "api_details": {
                 "cosmos_database": "varelab-website",
                 "cosmos_container": "ivory-draft",
@@ -1197,7 +1387,9 @@ async def upload_to_rag():
         return render_template('avatar-page.html')
         
     except Exception as e:
-        print(f"[ERROR] Unexpected error: {e}")
+        import traceback
+        error_traceback = traceback.format_exc()
+        print(f"[DETAILED ERROR] {error_traceback}")
         return jsonify({'error': f'Unexpected error: {str(e)}'}), 500
 
 # Add a new route to directly access the avatar page
@@ -1222,19 +1414,28 @@ def internal_error(error):
 def not_found_error(error):
     return jsonify({'error': 'Resource not found'}), 404
 
+
 @app.route('/get_avatars')
-async def get_avatars():
+def get_avatars():
     try:
         custom_index_name = "custom-rag-vare"
-        pinecone_api_key = "9b4c63f4-a0ca-464c-b230-674ead51a686"
+        pinecone_api_key = os.environ.get('PINECONE_API_KEY') 
         pc = Pinecone(api_key=pinecone_api_key)
+        
+        # Get the index info to determine dimension
+        index_info = pc.describe_index(custom_index_name)
+        index_dimension = index_info.dimension
+        print(f"[DEBUG] Index dimension is {index_dimension}")
         
         # Get the index
         index = pc.Index(custom_index_name)
         
+        # Create zero vector with correct dimension
+        zero_vector = [0] * index_dimension
+        
         # Query all vectors
         response = index.query(
-            vector=[0] * 1536,  # Dummy vector to get all records
+            vector=zero_vector,
             top_k=100,
             include_metadata=True
         )
@@ -1251,20 +1452,125 @@ async def get_avatars():
                     'avatar_name': metadata_dict.get('avatar_name', 'Unknown'),
                     'avatar_description': metadata_dict.get('avatar_description', ''),
                     'avatar_version': metadata_dict.get('avatar_version', ''),
-                    'category_id': metadata_dict.get('index_name', '')
+                    'category_id': metadata_dict.get('index_name', ''),
+                    'background': metadata_dict.get('background', 'home.png')
                 }
                 avatars.append(avatar_info)
             except Exception as e:
                 print(f"Error processing match: {e}")
                 continue
         
-        print(f"Found {len(avatars)} avatars")  # Debug print
+        print(f"Found {len(avatars)} avatars")
         return jsonify({'avatars': avatars})
-        
+            
     except Exception as e:
         print(f"[ERROR] Failed to fetch avatars: {e}")
         return jsonify({'error': str(e)}), 500
     
+
+
+@app.route('/config')
+def get_config():
+    return jsonify({
+        "azureSpeechRegion": os.getenv("AZURE_SPEECH_REGION"),
+        "azureSpeechSubscriptionKey": os.getenv("AZURE_SPEECH_SUBSCRIPTION_KEY"),
+        "ttsVoiceName": os.getenv("TTS_VOICE_NAME"),
+        "talkingAvatarCharacterName": os.getenv("TALKING_AVATAR_CHARACTER"),
+        "personalVoiceSpeakerProfileID": os.getenv("PERSONAL_VOICE_SPEAKER_PROFILE"),
+        "customVoiceEndpointId": os.getenv("CUSTOM_VOICE_ENDPOINT_ID"),
+        "customVendpoinIDt": os.getenv("CUSTOM_VOICE_DEPLOYMENT_ID")
+    })
+
+########################################################################################################
+# R2 chat upload
+########################################################################################################
+
+from flask import Flask, request, jsonify
+import boto3
+from botocore.config import Config
+import logging
+import json
+import os
+
+# R2 Storage Service
+class S3Service:
+    def __init__(self, s3_client, bucket):
+        self.s3_client = s3_client
+        self.bucket = bucket
+
+    def upload_json_to_r2(self, key, json_data, content_type='application/json'):
+        if isinstance(json_data, dict):
+            json_data = json.dumps(json_data)
+        
+        json_bytes = json_data.encode('utf-8')
+        
+        # Log the details for debugging
+        logging.info(f"Uploading to bucket: {self.bucket}, key: {key}")
+        
+        self.s3_client.put_object(
+            Bucket=self.bucket,
+            Key=key,
+            Body=json_bytes,
+            ContentType=content_type
+        )
+
+def new_r2_service():
+    # Use your hardcoded values for now since we're not using environment variables
+    account = "df2ea43a01264cce57ae81dc60d2d4f5"
+    access_key = "8f3319de2021e17b5c5dd67ca810f365"
+    secret_key = "54112572aa5f4602b3c32a2cf2cc887a02e2aabc4cd287f2b908263269629ec1"
+    bucket = "dialogue-json"
+    
+    logging.info(f"Initializing R2 service for account: {account[:4]}... and bucket: {bucket}")
+    
+    r2_config = Config(
+        s3={
+            "addressing_style": "virtual",
+        },
+        retries = {
+            'max_attempts': 10,
+            'mode': 'standard'
+        }
+    )
+    
+    s3_client = boto3.client(
+        's3',
+        endpoint_url=f"https://{account}.r2.cloudflarestorage.com",
+        aws_access_key_id=access_key,
+        aws_secret_access_key=secret_key,
+        config=r2_config
+    )
+    
+    return S3Service(s3_client, bucket)
+
+# Add the R2 upload route directly to your app
+@app.route('/upload_to_r2', methods=['POST'])
+def upload_to_r2():
+    try:
+        logging.info("Upload to R2 endpoint called")
+        
+        if request.is_json:
+            json_data = request.get_json()
+            logging.info(f"Received JSON data: {json.dumps(json_data)[:100]}...")
+            
+            session_id = json_data.get('sessionId', 'unknown')
+            timestamp = json_data.get('timestamp', '')
+            file_key = f"chat_{session_id}_{timestamp.replace(':', '-').replace('.', '-')}.json"
+            
+            logging.info(f"Generated file key: {file_key}")
+            
+            s3_service = new_r2_service()
+            s3_service.upload_json_to_r2(file_key, json_data)
+            
+            return jsonify({"success": True, "message": "Chat data uploaded to R2 successfully", "file_key": file_key}), 200
+        else:
+            logging.warning("No JSON data found in request")
+            return jsonify({"success": False, "message": "No JSON data found in request"}), 400
+    except Exception as e:
+        logging.error(f"Failed to upload JSON data: {str(e)}", exc_info=True)
+        return jsonify({"success": False, "message": f"Error: {str(e)}"}), 500
+    # This function should be called in your main app.py file
+# Example: add_r2_routes(app)
 
 ########################################################################################################
 

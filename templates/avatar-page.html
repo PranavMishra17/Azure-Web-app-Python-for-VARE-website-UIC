@@ -351,29 +351,34 @@ async function fetchAvatars() {
     }
 }
 
-    //fetchAvatars();
-
 function createAvatarBlock(avatar) {
     const div = document.createElement('div');
     div.className = 'avatar-block';
-    
-    // Get avatar image based on version
+    div.setAttribute('data-background', avatar.background);
+
     const avatarImage = getAvatarImage(avatar.avatar_version);
 
     div.innerHTML = `
-        <div class="avatar-header">
-            <img src="${avatarImage}" alt="${avatar.avatar_name}" class="avatar-image">
-            <div class="avatar-title">
-                <h3 class="avatar-name">${avatar.avatar_name}</h3>
-                <div class="avatar-version">${avatar.avatar_version}</div>
+        <div class="avatar-header" style="background-image: url('/static/images/${avatar.background}'); background-size: cover; position: relative; height: 120px; border-radius: 8px 8px 0 0; display: flex; align-items: center;">
+            <div class="avatar-container" style="position: relative; left: 20px; margin-right: 20px;">
+                <div class="avatar-circle" style="width: 90px; height: 90px; border-radius: 50%; background-color: white; border: 2px solid #4a90e2; display: flex; justify-content: center; align-items: center; overflow: hidden;">
+                    <img src="${avatarImage}" alt="${avatar.avatar_name}" class="avatar-image" style="width: 100%; height: 100%; object-fit: cover;">
+                </div>
             </div>
         </div>
-        <div class="avatar-description">${avatar.avatar_description}</div>
-        <button onclick="startConversation('${avatar.category_id}')" class="btn btn-primary">Start Conversation</button>
+        
+        <div style="padding: 15px; text-align: center;">
+            <h3 class="avatar-name" style="margin: 0 0 10px 0; font-size: 18px; font-weight: bold;">${avatar.avatar_name}</h3>
+            <div class="avatar-description" style="margin-bottom: 15px; font-size: 14px; color: #555;">${avatar.avatar_description}</div>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="avatar-version" style="font-size: 14px; color: #666;">${avatar.avatar_version}</div>
+                <button onclick="startConversation('${avatar.category_id}')" class="btn btn-primary" style="background-color: #007bff; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer;">Start Conversation</button>
+            </div>
+        </div>
     `;
     return div;
 }
-
 
         function getAvatarImage(version) {
             // You can replace these with actual image URLs
@@ -386,36 +391,47 @@ function createAvatarBlock(avatar) {
             return images[version] || '/api/placeholder/80/80';
         }
 
+        function getBackgroundImage(version) {
+            // You can replace these with actual image URLs
+            const images = {
+                'Space': '/static/images/sta.png',
+                'Home': '/static/images/home.png',
+                'Hospital': '/static/images/hos.png',
+                'Space Station': '/static/images/station.png'
+            };
+            return images[version] || '/api/placeholder/80/80';
+        }
+
         function startConversation(categoryId) {
             const avatarBlock = event.target.closest('.avatar-block');
             const avatarName = avatarBlock.querySelector('.avatar-name').textContent;
             const avatarVersion = avatarBlock.querySelector('.avatar-version').textContent;
             const avatarDescription = avatarBlock.querySelector('.avatar-description').textContent;
+            const avatarBackground = avatarBlock.getAttribute('data-background');
 
-            // First initialize a new chat session
+            // Initialize a new chat session
             fetch('/initialize_chat', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    categoryId: categoryId
-                })
+                body: JSON.stringify({ categoryId: categoryId })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    // Then navigate to the conversation page
-                    const url = `/avatar-conv.html?categoryId=${encodeURIComponent(categoryId)}&version=${encodeURIComponent(avatarVersion)}&name=${encodeURIComponent(avatarName)}&description=${encodeURIComponent(avatarDescription)}`;
-                    window.location.href = url;
+                // Navigate to conversation page with all parameters including background
+                const url = `/avatar-conv.html?categoryId=${encodeURIComponent(categoryId)}&version=${encodeURIComponent(avatarVersion)}&name=${encodeURIComponent(avatarName)}&description=${encodeURIComponent(avatarDescription)}&backgroundImage=${encodeURIComponent(avatarBackground)}`;
+                window.location.href = url;
                 } else {
-                    console.error('Failed to initialize chat:', data.error);
+                console.error('Failed to initialize chat:', data.error);
                 }
             })
             .catch(error => {
                 console.error('Error initializing chat:', error);
             });
-        }
+            }
+
         // Load avatars when page loads
         document.addEventListener('DOMContentLoaded', fetchAvatars);
     </script>

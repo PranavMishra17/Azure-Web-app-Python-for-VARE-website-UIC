@@ -614,6 +614,9 @@
   
       // Set chat panel to be closed by default on load
       window.onload = () => {
+        // Call the function to load config
+        fetchConfig();
+
         startSessionAutomatically();
         const chatPanel = document.getElementById('chatPanel');
         chatPanel.classList.add('closed');
