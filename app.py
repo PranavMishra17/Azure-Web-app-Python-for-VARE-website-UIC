@@ -1586,6 +1586,6 @@ if __name__ == '__main__':
     missing_vars = [var for var, value in required_vars.items() if not value]
     if missing_vars:
         print(f"Error: Missing required environment variables: {', '.join(missing_vars)}")
-        exit(1)
+        #exit(1)
     #app.run(debug=True, host ='0.0.0.0', port=8000)
     app.run()
