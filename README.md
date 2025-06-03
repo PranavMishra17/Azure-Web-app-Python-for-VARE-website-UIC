@@ -1,4 +1,4 @@
-# Azure Talking Avatar RAG Interface
+# MedRAG Avatar Platform - IVORY
 
 A web application for creating and interacting with custom talking avatars powered by Azure Cognitive Services and RAG (Retrieval Augmented Generation) technology.
 
